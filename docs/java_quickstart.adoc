@@ -1,6 +1,6 @@
 [#java-quickstart]
-
-== Get Started
+= Java Quickstart
+== Dependency
 
 Firstly, ensure that the necessary modules of Crux are within your project.
 As a bare minimum, within a `pom.xml` file:
