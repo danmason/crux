@@ -117,15 +117,17 @@ Date transactionTime = result.txTime;
 
 == Queries
 
+=== Creating a Query
 Queries in Crux have a number of potential clauses (see <<#queries, queries>>),
 though at least require a *find* clause and a *where* clause. An example of
-creating and submitting a simple query:
+creating a simple query:
 
 [source, java]
 ----
 Query basicQuery = Query.find("[n ln]")
    .where("[[p1 :name n]" +
-          "[p1 :last-name ln]]]")
+          "[p1 :last-name ln]]]");
+
 ----
 
 An example of a query with one of the optional clauses, `args`:
@@ -134,7 +136,33 @@ An example of a query with one of the optional clauses, `args`:
 ----
 Query queryWithArgs = Query.find("[n]")
    .where("[[e :name n]]")
-   .args("[{e :ivan n \"Ivan\"}]")
+   .args("[{e :ivan n \"Ivan\"}]");
 ----
 
 There are a number of other optional clauses, which can be found within the `Query` class.
+
+=== Submitting a query
+We can now submit a query by getting the `Database` from a Crux node (using `.db()`) and
+calling `.query()` on it.
+
+[source, java]
+----
+Database db = node.db();
+Set<ResultTuple> resultSet = db.query(query);
+----
+
+The result returned from the query is a set of `ResultTuple` objects. From a `ResultTuple`,
+we can extract information by either passing in an index or a reference to one of
+the symbols used in the query. For example, from the find statement of the basic query,
+`.find("[n ln]")`, we can extract the value at `ln` using either:
+
+[source, java]
+----
+tuple.get(1)
+----
+or
+
+[source, java]
+----
+tuple.get("ln")
+----
