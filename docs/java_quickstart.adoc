@@ -1,0 +1,140 @@
+[#java-quickstart]
+
+== Get Started
+
+Firstly, ensure that the necessary modules of Crux are within your project.
+As a bare minimum, within a `pom.xml` file:
+
+[source]
+----
+<dependency>
+        <groupId>juxt</groupId>
+        <artifactId>crux-core</artifactId>
+        <version>19.09-1.5.0-alpha</version>
+</dependency>
+----
+
+All of the classes used below are within the `crux.api.v2` package.
+
+== Starting a node
+
+To start a Crux node, we require a set of configurations for the node. In
+this example, we will be using the *StandaloneTopology* class to create a
+configuration for a standalone node using `memdb`, though further options
+for configurations can be found within <<#configuration,configuration>>.
+
+[source, java]
+----
+StandaloneTopology standaloneConfig = StandaloneTopology.standaloneTopology()
+    .withKvStore("crux.kv.memdb/kv")
+    .withDbDir("data/db-dir-1")
+    .withEventLogDir("data/eventlog-1")
+    .withEventLogKvStore("crux.kv.memdb/kv");
+
+CruxNode node = CruxNode.cruxNode(standaloneConfig);
+----
+
+== Transactions
+=== Operations
+In Crux, there are four types of operations - *Put*, *Delete*, *CAS* and *Evict*.
+Within the Java API, there are classes representing each. Each operation, at
+minimum, requires either a Crux Id (represented in the Java API as the `CruxId` class)
+or a document containing a Crux Id (represented using the `Document` class).
+
+Some examples of each type of operation are below:
+
+*PutOperation*
+
+[source, java]
+----
+CruxId picasso = CruxId.cruxId("dbpedia.resource/Pablo-Picasso");
+
+Document doc = Document.document(picasso)
+   .with("first-name", "Pablo")
+
+PutOperation putOp = PutOperation.putOp(doc);
+----
+
+*CasOperation*
+
+[source, java]
+----
+CruxId casId = CruxId.cruxId("John");
+
+Document oldDoc = Document.document(casId)
+   .with("name", "John")
+   .with("age", 20);
+Document newDoc = Document.document(casId)
+   .with("name", "John")
+   .with("age", 21);
+
+CasOperation casOp = CasOperation.casOp(oldDoc, newDoc);
+----
+
+*DeleteOperation*
+
+[source, java]
+----
+CruxId delId = CruxId.cruxId("to-delete");
+DeleteOperation delOp = DeleteOperation.deleteOp(delId);
+----
+
+
+*EvictOperation*
+
+[source, java]
+----
+CruxId evictId = CruxId.cruxId("to-evict");
+EvictOperation evictOp = EvictOperation.evictOp(evictId);
+----
+
+=== Valid Times
+
+Each of the operations above can also be at a certain ValidTime, which can be added
+to the operation by calling `.withValidTime(validTime)`, where `validTime` is a `Date`
+object. For example:
+
+[source, java]
+----
+putOp.withValidTime(new Date());
+----
+
+=== Submitting Transactions
+To transact an operation/set of operations to a node, we simply call `submitTx`:
+
+[source, java]
+----
+TxResult result = node.submitTx(putOp, putOp2, delOp, evictOp);
+----
+
+The `TxResult` returned from a transaction contains the transaction Id and transaction time:
+
+[source, java]
+----
+Long transactionId = result.txId;
+Date transactionTime = result.txTime;
+----
+
+== Queries
+
+Queries in Crux have a number of potential clauses (see <<#queries, queries>>),
+though at least require a *find* clause and a *where* clause. An example of
+creating and submitting a simple query:
+
+[source, java]
+----
+Query basicQuery = Query.find("[n ln]")
+   .where("[[p1 :name n]" +
+          "[p1 :last-name ln]]]")
+----
+
+An example of a query with one of the optional clauses, `args`:
+
+[source, java]
+----
+Query queryWithArgs = Query.find("[n]")
+   .where("[[e :name n]]")
+   .args("[{e :ivan n \"Ivan\"}]")
+----
+
+There are a number of other optional clauses, which can be found within the `Query` class.
