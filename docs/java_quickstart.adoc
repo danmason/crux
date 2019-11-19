@@ -1,5 +1,7 @@
 [#java-quickstart]
 = Java Quickstart
+The Java API is currently being worked on and improved, so some of the
+information below is subject to changes/breakages.
 == Dependency
 
 Firstly, ensure that the necessary modules of Crux are within your project.
