@@ -16,7 +16,7 @@ As a bare minimum, within a `pom.xml` file:
 </dependency>
 ----
 
-All of the classes used below are within the `crux.api.v2` package.
+All of the classes used below are within the `crux.api.alpha` package.
 
 == Starting a node
 
