@@ -20,20 +20,17 @@ All of the classes used below are within the `crux.api.v2` package.
 
 == Starting a node
 
-To start a Crux node, we require a set of configurations for the node. In
-this example, we will be using the *StandaloneTopology* class to create a
-configuration for a standalone node using `memdb`, though further options
-for configurations can be found within <<#configuration,configuration>>.
+To start a Crux node, we require a set of configurations (or a *Topology*) for the node. In
+this example, we will be using the *StandaloneTopology* class to create a standalone node using `memdb`, though further options for configurations can be found within <<#configuration,configuration>>.
 
 [source, java]
 ----
-StandaloneTopology standaloneConfig = StandaloneTopology.standaloneTopology()
+CruxNode node = StandaloneTopology.standaloneTopology()
     .withKvStore("crux.kv.memdb/kv")
     .withDbDir("data/db-dir-1")
     .withEventLogDir("data/eventlog-1")
-    .withEventLogKvStore("crux.kv.memdb/kv");
-
-CruxNode node = CruxNode.cruxNode(standaloneConfig);
+    .withEventLogKvStore("crux.kv.memdb/kv")
+    .startNode();
 ----
 
 == Transactions
@@ -92,9 +89,7 @@ EvictOperation evictOp = EvictOperation.evictOp(evictId);
 
 === Valid Times
 
-Each of the operations above can also be at a certain ValidTime, which can be added
-to the operation by calling `.withValidTime(validTime)`, where `validTime` is a `Date`
-object. For example:
+Each of the operations above (_aside from EvictOperation_) can also be at a certain ValidTime, which can be added to the operation by calling `.withValidTime(validTime)`, where `validTime` is a `Date` object. For example:
 
 [source, java]
 ----
@@ -150,7 +145,7 @@ calling `.query()` on it.
 [source, java]
 ----
 Database db = node.db();
-Set<ResultTuple> resultSet = db.query(query);
+List<ResultTuple> resultSet = db.query(query);
 ----
 
 The result returned from the query is a set of `ResultTuple` objects. From a `ResultTuple`,

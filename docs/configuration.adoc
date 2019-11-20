@@ -233,11 +233,11 @@ image::jdbc-modes.svg?sanitize=true[Local Cluster Mode,width=70%,align="center"]
 Below is the minimal configuration you will need:
 
 .Minimal JDBC Configuration
-[#table-conversion%header,cols="d,d,d"]
+[#table-conversion%header,cols="d,d"]
 |===
-|Property|Java Function|Description
-|`:crux.jdbc/dbtype`|`withDbType`|One of: *postgresql*, *oracle*, *mysql*, *h2*, *sqlite*
-|`:crux.jdbc/dbname`|`withDbName`|Database Name
+|Property|Description
+|`:crux.jdbc/dbtype`|One of: *postgresql*, *oracle*, *mysql*, *h2*, *sqlite*
+|`:crux.jdbc/dbname`|Database Name
 |===
 
 Depending on the type of JDBC database used, you may also need some of the following properties:
