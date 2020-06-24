@@ -2169,7 +2169,7 @@
                       {:find '[?e]
                        :where '[[?e :age ?a]
                                 [(?adult ?a)]]
-                       :args [{:?adult #(> % 18)}]})
+                       :args [{'?adult #(> % 18)}]})
                #{[:2] [:3]})))
 
     (t/testing "Calling a function"

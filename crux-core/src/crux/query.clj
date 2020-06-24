@@ -21,12 +21,11 @@
            (java.util Comparator Date List UUID)
            [java.util.concurrent Executors ExecutorService TimeoutException TimeUnit]))
 
+
 (defn- logic-var? [x]
   (symbol? x))
 
 (def ^:private literal? (complement (some-fn vector? logic-var?)))
-
-(declare pred-constraint)
 
 (defn- expression-spec [sym spec]
   (s/and seq?
@@ -34,27 +33,33 @@
          (s/conformer next)
          spec))
 
-(def ^:private built-ins '#{and})
-
-(defn- pred-constraint? [x]
-  (contains? (methods pred-constraint) x))
-
 (s/def ::triple (s/and vector? (s/cat :e (some-fn logic-var? c/valid-id? set?)
                                       :a (s/and c/valid-id? some?)
                                       :v (s/? (some-fn logic-var? literal?)))))
 
-(s/def ::pred-fn (s/and symbol?
-                        (complement built-ins)
-                        (s/conformer #(or (if (pred-constraint? %)
-                                            %
-                                            (some->> (if (qualified-symbol? %)
-                                                       (requiring-resolve %)
-                                                       (ns-resolve 'clojure.core %))
-                                                     (var-get)))
-                                          %))
-                        (some-fn fn? logic-var?)))
+(def ^:private built-ins '#{and})
+
+(defmulti pred-args-spec first)
+
+(defmethod pred-args-spec 'get-attr [_]
+  (s/cat :pred-sym  #{'get-attr} :args (s/spec (s/cat :e-var logic-var? :attr literal? :not-found (s/? literal?))) :return logic-var?))
+
+(defmethod pred-args-spec '== [_]
+  (s/cat :pred-sym #{'==} :args (s/tuple some? some?)))
+
+(defmethod pred-args-spec '!= [_]
+  (s/cat :pred-sym #{'!=} :args (s/tuple some? some?)))
+
+(defmethod pred-args-spec :default [_]
+  (s/cat :pred-sym (s/or :var logic-var? :fn fn?) :args (s/coll-of any?) :return (s/? logic-var?)))
+
+(s/def ::pred-args (s/multi-spec pred-args-spec first))
+
+(s/def ::pred-sym (s/and symbol?
+                         (complement built-ins)))
+
 (s/def ::pred (s/and vector? (s/cat :pred (s/and seq?
-                                                 (s/cat :pred-fn ::pred-fn
+                                                 (s/cat :pred-sym ::pred-sym
                                                         :args (s/* any?)))
                                     :return (s/? logic-var?))))
 
@@ -119,26 +124,12 @@
 
 (s/def ::timeout nat-int?)
 
-(declare normalize-query open-index-store build-sub-query)
+(declare normalize-query)
+(declare open-index-store build-sub-query)
 
 (s/def ::query (s/and (s/conformer #'normalize-query)
                       (s/keys :req-un [::find ::where] :opt-un [::args ::rules ::offset ::limit ::order-by ::timeout ::full-results?])))
 
-(defmulti pred-args-spec first)
-
-(defmethod pred-args-spec 'get-attr [_]
-  (s/cat :pred-fn  #{'get-attr} :args (s/spec (s/cat :e-var logic-var? :attr literal? :not-found (s/? literal?))) :return logic-var?))
-
-(defmethod pred-args-spec '== [_]
-  (s/cat :pred-fn #{'==} :args (s/tuple some? some?)))
-
-(defmethod pred-args-spec '!= [_]
-  (s/cat :pred-fn #{'!=} :args (s/tuple some? some?)))
-
-(defmethod pred-args-spec :default [_]
-  (s/cat :pred-fn (s/or :var logic-var? :fn fn?) :args (s/coll-of any?) :return (s/? logic-var?)))
-
-(s/def ::pred-args (s/multi-spec pred-args-spec first))
 
 ;; NOTE: :min-count generates boxed math warnings, so this goes below
 ;; the spec.
@@ -147,6 +138,9 @@
 (defmulti pred-constraint
   (fn [{:keys [pred return] {:keys [pred-fn]} :pred :as clause} encode-value-fn idx-id arg-bindings]
     pred-fn))
+
+(defn- pred-constraint? [x]
+  (contains? (methods pred-constraint) x))
 
 (defn- blank-var? [v]
   (when (logic-var? v)
@@ -191,12 +185,17 @@
 
            (case type
              :pred {:pred [(let [{:keys [pred]} clause
-                                 {:keys [pred-fn args]} pred]
-                             (if-let [range-pred (and (= 2 (count args))
-                                                      (every? logic-var? args)
-                                                      (get pred->built-in-range-pred pred-fn))]
-                               (assoc-in clause [:pred :pred-fn] range-pred)
-                               clause))]}
+                                 {:keys [pred-sym args]} pred
+                                 pred-fn (or (when (pred-constraint? pred-sym) pred-sym)
+                                             (some->> (if (qualified-symbol? pred-sym)
+                                                        (requiring-resolve pred-sym)
+                                                        (ns-resolve 'clojure.core pred-sym))
+                                                      (var-get))
+                                             pred-sym)]
+                             (assoc-in clause [:pred :pred-fn] (or (and (= 2 (count args))
+                                                                        (every? logic-var? args)
+                                                                        (get pred->built-in-range-pred pred-fn))
+                                                                   pred-fn)))]}
 
              :range (let [[order clause] (first clause)
                           [order clause] (if (= :sym-sym order) ;; NOTE: to deal with rule expansion
@@ -623,13 +622,13 @@
                        arg-binding))]
         (unifier-fn values)))))
 
-(defmethod pred-constraint '== [{:keys [pred return] {:keys [pred-fn]} :pred :as clause} encode-value-fn idx-id arg-bindings]
+(defmethod pred-constraint '== [clause encode-value-fn idx-id arg-bindings]
   (built-in-unification-pred #(boolean (not-empty (apply set/intersection %))) encode-value-fn arg-bindings))
 
-(defmethod pred-constraint '!= [{:keys [pred return] {:keys [pred-fn]} :pred :as clause} encode-value-fn idx-id arg-bindings]
+(defmethod pred-constraint '!= [clause encode-value-fn idx-id arg-bindings]
   (built-in-unification-pred #(empty? (apply set/intersection %)) encode-value-fn arg-bindings))
 
-(defmethod pred-constraint :default [{:keys [pred return] {:keys [pred-fn]} :pred :as clause} encode-value-fn idx-id arg-bindings]
+(defmethod pred-constraint :default [{:keys [return] :as clause} encode-value-fn idx-id arg-bindings]
   (fn pred-constraint [index-store db idx-id->idx join-keys]
     (let [[pred-fn & args] (for [arg-binding arg-bindings]
                              (if (instance? VarBinding arg-binding)
