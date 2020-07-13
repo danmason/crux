@@ -149,11 +149,12 @@
    (if-let [error (get-in db [:entity :error])]
      {:error error}
      (let [query-params (get-in db [:current-route :query-params])
-     {:eid (:eid query-params)
-      :vt (common/iso-format-datetime (or (:valid-time query-params) (t/now)))
-      :tt (or (common/iso-format-datetime (:transaction-time query-params)) "Using Latest")
-      :document document
-      :linked-entities (get-in db [:entity :http :document "linked-entities"])}))))
+           document (get-in db [:entity :http :document])]
+       {:eid (:eid query-params)
+        :vt (common/iso-format-datetime (or (:valid-time query-params) (t/now)))
+        :tt (or (common/iso-format-datetime (:transaction-time query-params)) "Using Latest")
+        :document document
+        :linked-entities (get-in db [:entity :http :document "linked-entities"])}))))
 
 (rf/reg-sub
  ::entity-result-pane-document-error
