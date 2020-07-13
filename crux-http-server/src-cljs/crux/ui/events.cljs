@@ -18,7 +18,13 @@
    (let [result-meta (some-> (js/document.querySelector
                               (str "meta[title=" title "]"))
                              (.getAttribute "content"))
-         edn-content (reader/read-string result-meta)]
+         ;; this returns an error because the map values include the #object tag
+         ;; that read-string doesn't understand. Temporarily, it's wrapper in a
+         ;; try catch otherwise this prevents other events from firing i.e. the
+         ;; entity http request.
+         edn-content (try
+                       (reader/read-string result-meta)
+                       (catch js/Error e (js/console.error e)))]
      (if edn-content
        {:db (assoc db handler edn-content)}
        (js/console.warn "Metadata not found")))))
