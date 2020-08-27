@@ -10,13 +10,36 @@
             [crux.http-server.util :as util]
             [crux.io :as cio]
             [muuntaja.core :as m]
-            [muuntaja.format.core :as mfc])
+            [muuntaja.format.core :as mfc]
+            [clojure.spec.alpha :as s])
   (:import crux.http_server.entity_ref.EntityRef
+           crux.codec.Id
            (java.io Closeable OutputStream)
-           java.net.URLDecoder
            [java.time Instant ZonedDateTime ZoneId]
            java.time.format.DateTimeFormatter
            java.util.Date))
+
+(s/def ::sort-order keyword?)
+(s/def ::start-valid-time inst?)
+(s/def ::end-valid-time inst?)
+(s/def ::start-transaction-time inst?)
+(s/def ::end-transaction-time inst?)
+(s/def ::history boolean?)
+(s/def ::with-corrections boolean?)
+(s/def ::with-docs boolean?)
+(s/def ::query-params
+  (s/keys :opt-un [::util/eid
+                   ::history
+                   ::sort-order
+                   ::util/valid-time
+                   ::util/transaction-time
+                   ::start-valid-time
+                   ::start-transaction-time
+                   ::end-valid-time
+                   ::end-transaction-time
+                   ::with-corrections
+                   ::with-docs
+                   ::util/link-entities?]))
 
 (defn- entity-root-html []
   [:div.entity-root
@@ -28,7 +51,7 @@
      "Entity ID"]
     [:div.entity-editor__contents
      [:form
-      {:action "/_crux/entity"}
+      {:action "/entity"}
       [:textarea.textarea
        {:name "eid"
         :placeholder "Enter an entity ID, found under the `:crux.db/id` key inside your documents"
@@ -161,28 +184,31 @@
 (defn ->edn-encoder [_]
   (reify
     mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [entity entity-history] :as res} _]
+    (encode-to-output-stream [_ {:keys [entity error entity-history] :as res} _]
       (fn [^OutputStream output-stream]
         (with-open [w (io/writer output-stream)]
-          (if entity-history
-            (try
-              (print-method (iterator-seq entity-history) w)
-              (finally
-                (cio/try-close entity-history)))
-            (print-method entity w)))))))
+          (cond
+            error (.write w ^String (pr-str res))
+            entity-history (try
+                             (print-method (iterator-seq entity-history) w)
+                             (finally
+                               (cio/try-close entity-history)))
+            :else (print-method entity w)))))))
 
 (defn- ->tj-encoder [_]
   (reify
     mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [entity entity-history] :as res} _]
+    (encode-to-output-stream [_ {:keys [entity error entity-history] :as res} _]
       (fn [^OutputStream output-stream]
-        (let [w (transit/writer output-stream :json {:handlers {EntityRef entity-ref/ref-write-handler}})]
-          (if entity-history
-            (try
-              (transit/write w (iterator-seq entity-history))
-              (finally
-                (cio/try-close entity-history)))
-            (transit/write w entity)))))))
+        (let [w (transit/writer output-stream :json {:handlers {EntityRef entity-ref/ref-write-handler
+                                                                Id util/crux-id-write-handler}})]
+          (cond
+            error (transit/write (transit/writer output-stream :json) res)
+            entity-history (try
+                             (transit/write w (iterator-seq entity-history))
+                             (finally
+                               (cio/try-close entity-history)))
+            :else (transit/write w entity)))))))
 
 (defn ->entity-muuntaja [opts]
   (m/create (-> m/default-options
@@ -199,26 +225,20 @@
 
 (defn search-entity-history [{:keys [crux-node eid valid-time transaction-time sort-order history-opts]}]
   (try
-    (let [eid (edn/read-string {:readers {'crux/id c/id-edn-reader}}
-                               (URLDecoder/decode eid))
-          db (util/db-for-request crux-node {:valid-time valid-time
+    (let [db (util/db-for-request crux-node {:valid-time valid-time
                                              :transact-time transaction-time})
           entity-history (crux/open-entity-history db eid sort-order history-opts)]
       (if-not (.hasNext entity-history)
         {:not-found? true}
         {:valid-time (crux/valid-time db)
          :transaction-time (crux/transaction-time db)
-         :entity-history (cio/fmap-cursor (fn [entity-history]
-                                            (map #(update % :crux.db/content-hash str) entity-history))
-                                          entity-history)}))
+         :entity-history (cio/fmap-cursor (fn [entity-history] entity-history) entity-history)}))
     (catch Exception e
       {:error e})))
 
 (defn search-entity [{:keys [crux-node eid valid-time transaction-time link-entities?] :as params}]
   (try
-    (let [eid (edn/read-string {:readers {'crux/id c/id-edn-reader}}
-                               (URLDecoder/decode eid))
-          db (util/db-for-request crux-node {:valid-time valid-time
+    (let [db (util/db-for-request crux-node {:valid-time valid-time
                                              :transact-time transaction-time})
           entity (crux/entity db eid)]
       (cond
@@ -228,10 +248,11 @@
     (catch Exception e
       {:error e})))
 
-(defn transform-query-params [{:keys [query-params] :as req}]
-  (if (= "text/html" (get-in req [:muuntaja/response :format]))
-    (assoc query-params "with-docs" "true" "link-entities?" "true")
-    query-params))
+(defn transform-query-params [req]
+  (let [query-params (get-in req [:parameters :query])]
+    (if (= "text/html" (get-in req [:muuntaja/response :format]))
+      (assoc query-params :with-docs true :link-entities? true)
+      query-params)))
 
 (defmulti transform-query-resp
   (fn [resp req]
@@ -250,32 +271,29 @@
     no-entity? {:status 400, :body {:error "Missing eid"}}
     not-found? {:status 404, :body {:error (str eid " entity not found")}}
     error {:status 500, :body {:error (.getMessage ^Exception error)}}
-    entity-history {:status 200, :body res})
-  :else {:status 200, :body res})
+    :else {:status 200, :body res}))
 
-(defn entity-state [req {:keys [entity-muuntaja] :as options}]
-  (let [req (m/negotiate-and-format-request entity-muuntaja req)
-        {:strs [eid history sort-order
-                valid-time transaction-time
-                start-valid-time start-transaction-time
-                end-valid-time end-transaction-time
-                with-corrections with-docs link-entities?] :as query-params} (transform-query-params req)]
-    (-> (if (nil? eid)
-          (assoc options :no-entity? true)
-          (let [entity-options (assoc options
-                                      :eid eid
-                                      :valid-time (when-not (string/blank? valid-time) (instant/read-instant-date valid-time))
-                                      :transaction-time (when-not (string/blank? transaction-time) (instant/read-instant-date transaction-time)))]
-            (if history
-              (search-entity-history (assoc entity-options
-                                            :sort-order (some-> sort-order keyword)
-                                            :history-opts {:with-corrections? (some-> ^String with-corrections Boolean/valueOf)
-                                                           :with-docs? (some-> ^String with-docs Boolean/valueOf)
-                                                           :start {:crux.db/valid-time (some-> start-valid-time (instant/read-instant-date))
-                                                                   :crux.tx/tx-time (some-> start-transaction-time (instant/read-instant-date))}
-                                                           :end {:crux.db/valid-time (some-> end-valid-time (instant/read-instant-date))
-                                                                 :crux.tx/tx-time (some-> end-transaction-time (instant/read-instant-date))}}))
-              (search-entity (assoc entity-options
-                                    :link-entities? (some-> ^String link-entities? Boolean/valueOf))))))
-        (transform-query-resp req)
-        (->> (m/format-response entity-muuntaja req)))))
+(defn entity-state [options]
+  (fn [req]
+    (let [{:keys [eid history sort-order
+                  valid-time transaction-time
+                  start-valid-time start-transaction-time
+                  end-valid-time end-transaction-time
+                  with-corrections with-docs link-entities?] :as query-params} (transform-query-params req)]
+      (-> (if (nil? eid)
+            (assoc options :no-entity? true)
+            (let [entity-options (assoc options
+                                        :eid eid
+                                        :valid-time valid-time
+                                        :transaction-time transaction-time)]
+              (if history
+                (search-entity-history (assoc entity-options
+                                              :sort-order (some-> sort-order keyword)
+                                              :history-opts {:with-corrections? with-corrections
+                                                             :with-docs? with-docs
+                                                             :start {:crux.db/valid-time start-valid-time
+                                                                     :crux.tx/tx-time start-transaction-time}
+                                                             :end {:crux.db/valid-time end-valid-time
+                                                                   :crux.tx/tx-time end-transaction-time}}))
+                (search-entity (assoc entity-options :link-entities? link-entities?)))))
+          (transform-query-resp req)))))

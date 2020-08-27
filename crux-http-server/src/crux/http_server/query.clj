@@ -7,17 +7,51 @@
             [clojure.instant :as instant]
             [clojure.java.io :as io]
             [clojure.string :as string]
-            [crux.api :as api]
+            [crux.api :as crux]
             [crux.codec :as c]
             [muuntaja.core :as m]
             [muuntaja.format.core :as mfc]
             [crux.io :as cio]
-            [crux.db :as db])
+            [crux.db :as db]
+            [crux.query :as q]
+            [clojure.spec.alpha :as s]
+            [spec-tools.core :as st])
   (:import (java.io OutputStream Writer)
            [java.time Instant ZonedDateTime ZoneId]
            java.time.format.DateTimeFormatter
            java.util.Date
            crux.http_server.entity_ref.EntityRef))
+
+(s/def ::q
+  (st/spec
+   {:spec #(s/valid? ::q/query %)
+    :type :map
+    :decode/string (fn [_ q] (cond-> q (string? q) edn/read-string))}))
+
+(s/def ::find
+  (st/spec
+   {:spec #(s/valid? ::q/find %)
+    :type :vector
+    :decode/string (fn [_ find] (edn/read-string find))}))
+
+(defn vectorize-spec [spec]
+  (st/spec
+   {:spec #(s/valid? spec %)
+    :type :vector
+    :decode/string (fn [_ param] (mapv edn/read-string (if (coll? param) param [param])))}))
+
+(s/def ::where
+  (vectorize-spec ::q/where))
+
+(s/def ::args
+  (vectorize-spec ::q/args))
+
+(s/def ::order-by
+  (vectorize-spec ::q/order-by))
+
+;; TODO: Need to ensure all query clasues are present + coerced properly
+(s/def ::query-params
+  (s/keys :opt-un [::util/valid-time ::util/transaction-time ::util/link-entities? ::q ::find ::where ::args ::order-by ::q/offset ::q/limit ::q/full-results?]))
 
 (def query-root-str
   (string/join "\n"
@@ -32,7 +66,7 @@
                 " :where [[?e :crux.db/id]] ;; select ?e as the entity id for all entities in the database"
                 "}"]))
 
-(defn- query-root-html []
+(defn- query-root-html [{:keys [crux-node]}]
   [:div.query-root
    [:h1.query-root__title
     "Query"]
@@ -44,7 +78,7 @@
       "Datalog query editor"]
     [:div.query-editor__contents
      [:form
-      {:action "/_crux/query"}
+      {:action "/query"}
       [:textarea.textarea
        {:name "q"
         :rows 10
@@ -63,7 +97,12 @@
         [:input.input.input-time
          {:type "datetime-local"
           :name "transaction-time"
-          :step "0.01"}]]]
+          :step "0.01"
+          :value (some-> (crux/latest-completed-tx crux-node)
+                         :crux.tx/tx-time
+                         ((fn [tx-time] (.toInstant ^Date tx-time)))
+                         (ZonedDateTime/ofInstant (ZoneId/of "Z"))
+                         (->> (.format util/default-date-formatter )))}]]]
       [:button.button
        {:type "submit"}
        "Submit Query"]]]]])
@@ -71,16 +110,16 @@
 (defn- vectorize-param [param]
   (if (vector? param) param [param]))
 
-(defn- build-query [{:strs [find where args order-by limit offset full-results link-entities?]}]
-  (let [new-offset (if offset
-                     (Integer/parseInt offset)
-                     0)]
-    (cond-> {:find (c/read-edn-string-with-readers find)
-             :where (->> where vectorize-param (mapv c/read-edn-string-with-readers))
+
+;; TODO: Doesn't support all clauses a query can have - should do.
+(defn- build-query [{:keys [find where args order-by limit offset full-results link-entities?]}]
+  (let [new-offset (or offset 0)]
+    (cond-> {:find find
+             :where where
              :offset new-offset}
-      args (assoc :args (->> args vectorize-param (mapv c/read-edn-string-with-readers)))
-      order-by (assoc :order-by (->> order-by vectorize-param (mapv c/read-edn-string-with-readers)))
-      limit (assoc :limit (Integer/parseInt limit))
+      args (assoc :args args)
+      order-by (assoc :order-by order-by)
+      limit (assoc :limit limit)
       full-results (assoc :full-results? true)
       link-entities? (assoc :link-entities? true))))
 
@@ -88,7 +127,7 @@
   [results db]
   (let [entity-links (->> (apply concat results)
                           (into #{} (filter c/valid-id?))
-                          (into #{} (filter #(api/entity db %))))]
+                          (into #{} (filter #(crux/entity db %))))]
     (->> results
          (map (fn [tuple]
                 (->> tuple
@@ -100,7 +139,7 @@
 
 (defn resolve-prev-next-offset
   [query-params prev-offset next-offset]
-  (let [url (str "/_crux/query?"
+  (let [url (str "/query?"
                  (subs
                   (->> (dissoc query-params "offset")
                        (reduce-kv (fn [coll k v]
@@ -143,12 +182,12 @@
     (let [db (util/db-for-request crux-node {:valid-time valid-time
                                              :transact-time transaction-time})]
       {:query query
-       :valid-time (api/valid-time db)
-       :transaction-time (api/transaction-time db)
+       :valid-time (crux/valid-time db)
+       :transaction-time (crux/transaction-time db)
        :results (if link-entities?
-                  (let [results (api/q db query)]
+                  (let [results (crux/q db query)]
                     (cio/->cursor (fn []) (with-entity-refs results db)))
-                  (api/open-q db query))})
+                  (crux/open-q db query))})
     (catch Exception e
       {:error e})))
 
@@ -169,7 +208,7 @@
     (encode-to-bytes [_ {:keys [no-query? error results] :as res} charset]
       (try
         (let [^String resp (cond
-                             no-query? (util/raw-html {:body (query-root-html)
+                             no-query? (util/raw-html {:body (query-root-html opts)
                                                        :title "/query"
                                                        :options opts})
                              error (let [error-message (.getMessage ^Exception error)]
@@ -290,17 +329,14 @@
   (or (handle-error res)
       {:status 200, :body res}))
 
-(defn data-browser-query [req {:keys [query-muuntaja] :as options}]
-  (let [req (cond->> req
-              (not (get-in req [:muuntaja/response :format])) (m/negotiate-and-format-request query-muuntaja))
-        {:strs [valid-time transaction-time q] :as query-params} (:query-params req)]
-    (-> (if (empty? query-params)
-          (assoc options :no-query? true)
-          (run-query (-> (or (some-> q (edn/read-string))
-                             (build-query query-params))
-                         (transform-query-req req))
-                     (assoc options
-                            :valid-time (when-not (string/blank? valid-time) (instant/read-instant-date valid-time))
-                            :transaction-time (when-not (string/blank? transaction-time) (instant/read-instant-date transaction-time)))))
-        (transform-query-resp req)
-        (->> (m/format-response query-muuntaja req)))))
+(defn data-browser-query [options]
+  (fn [req]
+    (let [{:keys [valid-time transaction-time q]} (get-in req [:parameters :query])]
+      (-> (if (empty? (get-in req [:parameters :query]))
+            (assoc options :no-query? true)
+            (run-query (-> (or q (build-query (get-in req [:parameters :query])))
+                           (transform-query-req req))
+                       (assoc options
+                              :valid-time valid-time
+                              :transaction-time transaction-time)))
+          (transform-query-resp req)))))

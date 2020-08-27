@@ -26,7 +26,7 @@
          [:tr.table__row.body__row
           [:td.table__cell.body__cell
            [:a
-            {:href (format "/_crux/query?find=%s&where=%s" (format "[%s]" (name key)) (format "[e %s %s]" key (name key)))}
+            {:href (format "/query?find=%s&where=%s" (format "[%s]" (name key)) (format "[e %s %s]" key (name key)))}
             (with-out-str (pp/pprint key))]]
           [:td.table__cell.body__cell (with-out-str (pp/pprint value))]])))]])
 
@@ -89,8 +89,10 @@
              500)
    :body status-map})
 
-(defn status [req {:keys [status-muuntaja crux-node] :as options}]
-  (let [req (cond->> req
-              (not (get-in req [:muuntaja/response :format])) (m/negotiate-and-format-request status-muuntaja))]
-    (->> (transform-query-resp (assoc options :status-map (api/status crux-node)) req)
-         (m/format-response status-muuntaja req))))
+(defn status [{:keys [crux-node] :as options}]
+  (let [status-muuntaja (->status-muuntaja options)]
+    (fn [req]
+      (let [req (cond->> req
+                  (not (get-in req [:muuntaja/response :format])) (m/negotiate-and-format-request status-muuntaja))]
+        (->> (transform-query-resp (assoc options :status-map (api/status crux-node)) req)
+             (m/format-response status-muuntaja req))))))

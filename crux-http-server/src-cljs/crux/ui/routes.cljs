@@ -6,20 +6,20 @@
   [""
    ["/attribute-stats"
     {:name :attribute-stats}]
-   ["/_crux/status"
+   ["/status"
     {:name :status
      :link-text "Status"
      :controllers
      [{:start #(do
                  (rf/dispatch [:crux.ui.http/fetch-node-status])
                  (rf/dispatch [:crux.ui.http/fetch-node-attribute-stats]))}]}]
-   ["/_crux/query"
+   ["/query"
     {:name :query
      :link-text "Query"
      :controllers
      [{:identity #(gensym)
        :start #(rf/dispatch [:crux.ui.http/fetch-query-table])}]}]
-   ["/_crux/entity"
+   ["/entity"
     {:name :entity
      :link-text "Entity"
      :controllers

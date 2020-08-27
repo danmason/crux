@@ -19,8 +19,11 @@
 (defn- edn-list->lazy-seq [in]
   (let [in (PushbackReader. (InputStreamReader. in))
         open-paren \(]
-    (when-not (= (int open-paren) (.read in))
-      (throw (RuntimeException. "Expected delimiter: (")))
+    (let [first-char (.read in)]
+      (when-not (= (int open-paren) first-char)
+        (if (= first-char -1)
+          nil
+          (throw (RuntimeException. "Expected delimiter: (")))))
     (->> (repeatedly #(try
                         (edn/read {:readers {'crux/id c/id-edn-reader}
                                    :eof ::eof} in)
@@ -119,15 +122,19 @@
 
   ICruxDatasource
   (entity [this eid]
-    (api-request-sync (str url "/entity/" (str (c/new-id eid)))
-                      {:body (as-of-map this)
-                       :http-opts {:method :get}
-                       :->jwt-token ->jwt-token}))
+    (api-request-sync (str url "/entity")
+                      {:->jwt-token ->jwt-token
+                       :http-opts {:method :get
+                                   :query-params (cond-> {:eid (pr-str eid)}
+                                                   valid-time (assoc :valid-time (cio/format-rfc3339-date valid-time))
+                                                   transact-time (assoc :transaction-time (cio/format-rfc3339-date transact-time)))}}))
 
   (entityTx [this eid]
-    (api-request-sync (str url "/entity-tx/" (str (c/new-id eid)))
-                      {:body (as-of-map this)
-                       :http-opts {:method :get}
+    (api-request-sync (str url "/entity-tx")
+                      {:http-opts {:method :get
+                                   :query-params (cond-> {:eid (pr-str eid)}
+                                                   valid-time (assoc :valid-time (cio/format-rfc3339-date valid-time))
+                                                   transact-time (assoc :transaction-time (cio/format-rfc3339-date transact-time)))}
                        :->jwt-token ->jwt-token}))
 
   (query [this q]
@@ -138,19 +145,22 @@
 
   (openQuery [this q]
     (let [in (api-request-sync (str url "/query")
-                               {:body (assoc (as-of-map this)
-                                             :query (q/normalize-query q))
-                                :->jwt-token ->jwt-token
-                                :http-opts {:as :stream}})]
-      (cio/->cursor #(.close ^Closeable in)
-                    (edn-list->lazy-seq in))))
+                               {:->jwt-token ->jwt-token
+                                :http-opts {:as :stream
+                                            :method :get
+                                            :query-params (cond-> {:q (pr-str q)}
+                                                            valid-time (assoc :valid-time (cio/format-rfc3339-date valid-time))
+                                                            transact-time (assoc :transaction-time (cio/format-rfc3339-date transact-time)))}})]
+      (cio/->cursor #(.close ^Closeable in) (edn-list->lazy-seq in))))
 
   (entityHistory [this eid opts]
     (with-open [history (.openEntityHistory this eid opts)]
       (vec (iterator-seq history))))
 
   (openEntityHistory [this eid opts]
-    (let [qps (->> {:sort-order (condp = (.sortOrder opts)
+    (let [qps (->> {:eid (pr-str eid)
+                    :history true
+                    :sort-order (condp = (.sortOrder opts)
                                   HistoryOptions$SortOrder/ASC (name :asc)
                                   HistoryOptions$SortOrder/DESC (name :desc))
                     :with-corrections (.withCorrections opts)
@@ -162,13 +172,12 @@
                     :valid-time (cio/format-rfc3339-date valid-time)
                     :transaction-time (cio/format-rfc3339-date transact-time)}
                    (into {} (remove (comp nil? val))))]
-      (if-let [in (api-request-sync (str url "/entity-history/" (c/new-id eid))
+      (if-let [in (api-request-sync (str url "/entity")
                                     {:http-opts {:as :stream
                                                  :method :get
                                                  :query-params qps}
                                      :->jwt-token ->jwt-token})]
-        (cio/->cursor #(.close ^java.io.Closeable in)
-                      (edn-list->lazy-seq in))
+        (cio/->cursor #(.close ^java.io.Closeable in) (edn-list->lazy-seq in))
         (cio/->cursor #() []))))
 
   (validTime [_] valid-time)
@@ -197,7 +206,7 @@
   (openDB [this valid-time tx-time] (.db this valid-time tx-time))
 
   (status [_]
-    (api-request-sync (str url "/_crux/status")
+    (api-request-sync (str url "/status")
                       {:http-opts {:method :get}
                        :->jwt-token ->jwt-token}))
 
@@ -219,15 +228,17 @@
           (throw e)))))
 
   (hasTxCommitted [_ submitted-tx]
-    (api-request-sync (str url "/tx-committed?tx-id=" (:crux.tx/tx-id submitted-tx))
-                      {:http-opts {:method :get}
-                       :->jwt-token ->jwt-token}))
+    (->
+     (api-request-sync (str url "/tx-committed?tx-id=" (:crux.tx/tx-id submitted-tx))
+                       {:http-opts {:method :get}
+                        :->jwt-token ->jwt-token})
+     (get :tx-committed?)))
 
   (openTxLog [this after-tx-id with-ops?]
     (let [params (->> [(when after-tx-id
                          (str "after-tx-id=" after-tx-id))
                        (when with-ops?
-                         (str "with-ops=" with-ops?))]
+                         (str "with-ops?=" with-ops?))]
                       (remove nil?)
                       (str/join "&"))
           in (api-request-sync (cond-> (str url "/tx-log")
@@ -240,16 +251,20 @@
                     (edn-list->lazy-seq in))))
 
   (sync [_ timeout]
-    (api-request-sync (cond-> (str url "/sync")
-                        timeout (str "?timeout=" (.toMillis timeout)))
-                      {:http-opts {:method :get}
-                       :->jwt-token ->jwt-token}))
+    (->
+     (api-request-sync (cond-> (str url "/sync")
+                         timeout (str "?timeout=" (.toMillis timeout)))
+                       {:http-opts {:method :get}
+                        :->jwt-token ->jwt-token})
+     (get :crux.tx/tx-time)))
 
   (awaitTxTime [_ tx-time timeout]
-    (api-request-sync (cond-> (str url "/await-tx-time?tx-time=" (cio/format-rfc3339-date tx-time))
-                        timeout (str "&timeout=" (cio/format-duration-millis timeout)))
-                      {:http-opts {:method :get}
-                       :->jwt-token ->jwt-token}))
+    (->
+     (api-request-sync (cond-> (str url "/await-tx-time?tx-time=" (cio/format-rfc3339-date tx-time))
+                         timeout (str "&timeout=" (cio/format-duration-millis timeout)))
+                       {:http-opts {:method :get}
+                        :->jwt-token ->jwt-token})
+     (get :crux.tx/tx-time)))
 
   (awaitTx [_ tx timeout]
     (api-request-sync (cond-> (str url "/await-tx?tx-id=" (:crux.tx/tx-id tx))
