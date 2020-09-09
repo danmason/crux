@@ -203,7 +203,7 @@
         (let [w (transit/writer output-stream :json {:handlers {EntityRef entity-ref/ref-write-handler
                                                                 Id util/crux-id-write-handler}})]
           (cond
-            error (transit/write (transit/writer output-stream :json) res)
+            error (transit/write w res)
             entity-history (try
                              (transit/write w (iterator-seq entity-history))
                              (finally
@@ -223,26 +223,31 @@
                 (m/install {:name "application/edn"
                             :encoder [->edn-encoder]}))))
 
-(defn search-entity-history [{:keys [crux-node eid valid-time transaction-time sort-order history-opts]}]
+(defn search-entity-history [{:keys [crux-node]} {:keys [eid valid-time transaction-time sort-order with-corrections with-docs
+                                                         start-valid-time start-transaction-time end-valid-time end-transaction-time]}]
   (try
     (let [db (util/db-for-request crux-node {:valid-time valid-time
                                              :transact-time transaction-time})
+          history-opts {:with-corrections? with-corrections
+                        :with-docs? with-docs
+                        :start {:crux.db/valid-time start-valid-time
+                                :crux.tx/tx-time start-transaction-time}
+                        :end {:crux.db/valid-time end-valid-time
+                              :crux.tx/tx-time end-transaction-time}}
           entity-history (crux/open-entity-history db eid sort-order history-opts)]
       (if-not (.hasNext entity-history)
-        {:not-found? true}
-        {:valid-time (crux/valid-time db)
-         :transaction-time (crux/transaction-time db)
-         :entity-history (cio/fmap-cursor (fn [entity-history] entity-history) entity-history)}))
+        {:eid eid :not-found? true}
+        {:entity-history (cio/fmap-cursor (fn [entity-history] entity-history) entity-history)}))
     (catch Exception e
       {:error e})))
 
-(defn search-entity [{:keys [crux-node eid valid-time transaction-time link-entities?] :as params}]
+(defn search-entity [{:keys [crux-node]} {:keys [eid valid-time transaction-time link-entities?]}]
   (try
     (let [db (util/db-for-request crux-node {:valid-time valid-time
                                              :transact-time transaction-time})
           entity (crux/entity db eid)]
       (cond
-        (empty? entity) {:not-found? true}
+        (empty? entity) {:eid eid :not-found? true}
         link-entities? {:entity (entity-links db entity)}
         :else {:entity entity}))
     (catch Exception e
@@ -266,7 +271,7 @@
              :else 200)
    :body res})
 
-(defmethod transform-query-resp :default [{:keys [eid error no-entity? not-found? entity entity-history headers] :as res} req]
+(defmethod transform-query-resp :default [{:keys [error no-entity? eid not-found?] :as res} _]
   (cond
     no-entity? {:status 400, :body {:error "Missing eid"}}
     not-found? {:status 404, :body {:error (str eid " entity not found")}}
@@ -275,25 +280,9 @@
 
 (defn entity-state [options]
   (fn [req]
-    (let [{:keys [eid history sort-order
-                  valid-time transaction-time
-                  start-valid-time start-transaction-time
-                  end-valid-time end-transaction-time
-                  with-corrections with-docs link-entities?] :as query-params} (transform-query-params req)]
-      (-> (if (nil? eid)
-            (assoc options :no-entity? true)
-            (let [entity-options (assoc options
-                                        :eid eid
-                                        :valid-time valid-time
-                                        :transaction-time transaction-time)]
-              (if history
-                (search-entity-history (assoc entity-options
-                                              :sort-order (some-> sort-order keyword)
-                                              :history-opts {:with-corrections? with-corrections
-                                                             :with-docs? with-docs
-                                                             :start {:crux.db/valid-time start-valid-time
-                                                                     :crux.tx/tx-time start-transaction-time}
-                                                             :end {:crux.db/valid-time end-valid-time
-                                                                   :crux.tx/tx-time end-transaction-time}}))
-                (search-entity (assoc entity-options :link-entities? link-entities?)))))
+    (let [{:keys [eid history] :as query-params} (transform-query-params req)]
+      (-> (cond
+            (nil? eid) {:no-entity? true}
+            history (search-entity-history options query-params)
+            :else (search-entity options query-params))
           (transform-query-resp req)))))
