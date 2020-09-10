@@ -14,6 +14,7 @@
             [clojure.spec.alpha :as s])
   (:import crux.http_server.entity_ref.EntityRef
            crux.codec.Id
+           crux.io.Cursor
            (java.io Closeable OutputStream)
            [java.time Instant ZonedDateTime ZoneId]
            java.time.format.DateTimeFormatter
@@ -184,13 +185,15 @@
 (defn ->edn-encoder [_]
   (reify
     mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [entity error entity-history] :as res} _]
+    (encode-to-output-stream [_ {:keys [entity error ^Cursor entity-history] :as res} _]
       (fn [^OutputStream output-stream]
         (with-open [w (io/writer output-stream)]
           (cond
             error (.write w ^String (pr-str res))
             entity-history (try
-                             (print-method (iterator-seq entity-history) w)
+                             (if (.hasNext entity-history)
+                               (print-method (iterator-seq entity-history) w)
+                               (.write w ^String (pr-str '())))
                              (finally
                                (cio/try-close entity-history)))
             :else (print-method entity w)))))))
@@ -198,14 +201,16 @@
 (defn- ->tj-encoder [_]
   (reify
     mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [entity error entity-history] :as res} _]
+    (encode-to-output-stream [_ {:keys [entity error ^Cursor entity-history] :as res} _]
       (fn [^OutputStream output-stream]
         (let [w (transit/writer output-stream :json {:handlers {EntityRef entity-ref/ref-write-handler
                                                                 Id util/crux-id-write-handler}})]
           (cond
             error (transit/write w res)
             entity-history (try
-                             (transit/write w (iterator-seq entity-history))
+                             (if (.hasNext entity-history)
+                               (transit/write w (iterator-seq entity-history))
+                               (transit/write w '()))
                              (finally
                                (cio/try-close entity-history)))
             :else (transit/write w entity)))))))
@@ -235,9 +240,7 @@
                         :end {:crux.db/valid-time end-valid-time
                               :crux.tx/tx-time end-transaction-time}}
           entity-history (crux/open-entity-history db eid sort-order history-opts)]
-      (if-not (.hasNext entity-history)
-        {:eid eid :not-found? true}
-        {:entity-history (cio/fmap-cursor (fn [entity-history] entity-history) entity-history)}))
+      {:entity-history (cio/fmap-cursor identity entity-history)})
     (catch Exception e
       {:error e})))
 

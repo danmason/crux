@@ -16,11 +16,12 @@
             [crux.query :as q]
             [clojure.spec.alpha :as s]
             [spec-tools.core :as st])
-  (:import (java.io OutputStream Writer)
+  (:import crux.http_server.entity_ref.EntityRef
+           crux.io.Cursor
+           (java.io OutputStream Writer)
            [java.time Instant ZonedDateTime ZoneId]
            java.time.format.DateTimeFormatter
-           java.util.Date
-           crux.http_server.entity_ref.EntityRef))
+           java.util.Date))
 
 (s/def ::q
   (st/spec
@@ -229,27 +230,30 @@
 (defn ->edn-encoder [_]
   (reify
     mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [results error] :as res} _]
+    (encode-to-output-stream [_ {:keys [^Cursor results error] :as res} _]
       (fn [^OutputStream output-stream]
         (with-open [w (io/writer output-stream)]
           (try
-            (if error
-              (.write w ^String (pr-str res))
-              (print-method (iterator-seq results) w))
+            (cond
+              error (.write w ^String (pr-str res))
+              (and results (.hasNext results)) (print-method (iterator-seq results) w)
+              :else (.write w ^String (pr-str '())))
             (finally
               (cio/try-close results))))))))
 
 (defn- ->tj-encoder [_]
   (reify
     mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [results error] :as res} _]
+    (encode-to-output-stream [_ {:keys [^Cursor results error] :as res} _]
       (fn [^OutputStream output-stream]
-        (try
-          (if error
-            (transit/write (transit/writer output-stream :json) res)
-            (transit/write (transit/writer output-stream :json {:handlers {EntityRef entity-ref/ref-write-handler}}) (iterator-seq results)))
-          (finally
-            (cio/try-close results)))))))
+        (let [w (transit/writer output-stream :json {:handlers {EntityRef entity-ref/ref-write-handler}})]
+          (try
+            (cond
+              error (transit/write w res)
+              (and results (.hasNext results)) (transit/write w (iterator-seq results))
+              :else (transit/write w '()))
+            (finally
+              (cio/try-close results))))))))
 
 (defn ->query-muuntaja [opts]
   (m/create (-> m/default-options
