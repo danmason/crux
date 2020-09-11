@@ -19,7 +19,7 @@
         query-params (cond-> (str "?eid=" encoded-eid)
                        vt (str "&valid-time=" vt)
                        tt (str "&transaction-time=" tt))]
-    (str "/entity" query-params)))
+    (str "/_crux/entity" query-params)))
 
 #? (:clj
     (defmethod print-method EntityRef [ref ^Writer w]

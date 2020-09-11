@@ -35,20 +35,20 @@
 
 (t/deftest test-ui-routes
   ;; Insert data
-  (let [{:keys [crux.tx/tx-id crux.tx/tx-time] :as tx} (-> (http/post (str *api-url* "/tx-log")
+  (let [{:keys [crux.tx/tx-id crux.tx/tx-time] :as tx} (-> (http/post (str *api-url* "/_crux/tx-log")
                                                                       {:content-type :edn
                                                                        :body (pr-str '[[:crux.tx/put {:crux.db/id :ivan, :linking :peter}]
                                                                                        [:crux.tx/put {:crux.db/id :peter, :name "Peter"}]])
                                                                        :as :stream})
                                                            (parse-body "application/edn"))]
-    (http/get (str *api-url* "/await-tx?tx-id=" tx-id))
+    (http/get (str *api-url* "/_crux/await-tx?tx-id=" tx-id))
 
     ;; Test redirect on "/" endpoint.
-    (t/is (= "/query" (-> (get-result-from-path "/")
+    (t/is (= "/_crux/query" (-> (get-result-from-path "/")
                                 (get-in [:headers "Location"]))))
 
     ;; Test getting the entity with different types
-    (let [get-entity (fn [accept-type] (-> (get-result-from-path "/entity?eid=:peter" accept-type)
+    (let [get-entity (fn [accept-type] (-> (get-result-from-path "/_crux/entity?eid=:peter" accept-type)
                                            (parse-body accept-type)))]
       (t/is (= {:crux.db/id :peter, :name "Peter"}
                (get-entity "application/edn")))
@@ -57,7 +57,7 @@
 
     ;; Test getting linked entities
     (let [get-linked-entities (fn [accept-type]
-                                (-> (get-result-from-path "/entity?eid=:ivan&link-entities?=true" accept-type)
+                                (-> (get-result-from-path "/_crux/entity?eid=:ivan&link-entities?=true" accept-type)
                                     (parse-body accept-type)))]
       (t/is (= {:crux.db/id :ivan, :linking (entity-ref/->EntityRef :peter)}
                (get-linked-entities "application/edn")))
@@ -66,7 +66,7 @@
 
     ;; Testing getting query results
     (let [get-query (fn [accept-type]
-                      (set (-> (get-result-from-path "/query?find=[e]&where=[e+%3Acrux.db%2Fid+_]" accept-type)
+                      (set (-> (get-result-from-path "/_crux/query?find=[e]&where=[e+%3Acrux.db%2Fid+_]" accept-type)
                                (parse-body accept-type))))]
       (t/is (= #{[:ivan] [:peter]} (get-query "application/edn")))
       (t/is (= #{[:ivan] [:peter]} (get-query "application/transit+json")))
@@ -75,15 +75,15 @@
 
     ;; Testing getting linked entities in query results
     (let [get-query (fn [accept-type]
-                      (set (-> (get-result-from-path "/query?find=[e]&where=[e+%3Acrux.db%2Fid+_]&link-entities?=true" accept-type)
+                      (set (-> (get-result-from-path "/_crux/query?find=[e]&where=[e+%3Acrux.db%2Fid+_]&link-entities?=true" accept-type)
                                (parse-body accept-type))))]
       (t/is (= #{[(entity-ref/->EntityRef :ivan)] [(entity-ref/->EntityRef :peter)]} (get-query "application/edn")))
       (t/is (= #{[(entity-ref/->EntityRef :ivan)] [(entity-ref/->EntityRef :peter)]} (get-query "application/transit+json"))))
 
     ;; Test file-type based negotiation
     (t/is (= #{[":ivan"] [":peter"] ["e"]}
-             (set (-> (get-result-from-path "/query.csv?find=[e]&where=[e+%3Acrux.db%2Fid+_]")
+             (set (-> (get-result-from-path "/_crux/query.csv?find=[e]&where=[e+%3Acrux.db%2Fid+_]")
                       (parse-body "text/csv")))))
     (t/is (= #{[":ivan"] [":peter"] ["e"]}
-             (set (-> (get-result-from-path "/query.tsv?find=[e]&where=[e+%3Acrux.db%2Fid+_]")
+             (set (-> (get-result-from-path "/_crux/query.tsv?find=[e]&where=[e+%3Acrux.db%2Fid+_]")
                       (parse-body "text/tsv")))))))

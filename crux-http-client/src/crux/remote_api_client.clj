@@ -116,7 +116,7 @@
 
   ICruxDatasource
   (entity [this eid]
-    (api-request-sync (str url "/entity")
+    (api-request-sync (str url "/_crux/entity")
                       {:->jwt-token ->jwt-token
                        :http-opts {:method :get
                                    :query-params {:eid (pr-str eid)
@@ -124,7 +124,7 @@
                                                   :transact-time (some->  transact-time (cio/format-rfc3339-date))}}}))
 
   (entityTx [this eid]
-    (api-request-sync (str url "/entity-tx")
+    (api-request-sync (str url "/_crux/entity-tx")
                       {:http-opts {:method :get
                                    :query-params {:eid (pr-str eid)
                                                   :valid-time (some-> valid-time (cio/format-rfc3339-date))
@@ -138,7 +138,7 @@
         (set (iterator-seq res)))))
 
   (openQuery [this q]
-    (let [in (api-request-sync (str url "/query")
+    (let [in (api-request-sync (str url "/_crux/query")
                                {:->jwt-token ->jwt-token
                                 :http-opts {:as :stream
                                             :method :get
@@ -165,7 +165,7 @@
                :end-transaction-time (some-> (.endTransactionTime opts) (cio/format-rfc3339-date))
                :valid-time (cio/format-rfc3339-date valid-time)
                :transaction-time (cio/format-rfc3339-date transact-time)}]
-      (if-let [in (api-request-sync (str url "/entity")
+      (if-let [in (api-request-sync (str url "/_crux/entity")
                                     {:http-opts {:as :stream
                                                  :method :get
                                                  :query-params qps}
@@ -183,7 +183,7 @@
 
   (db [_ valid-time tx-time]
     (when tx-time
-      (let [latest-tx-time (-> (api-request-sync (str url "/latest-completed-tx")
+      (let [latest-tx-time (-> (api-request-sync (str url "/_crux/latest-completed-tx")
                                                  {:http-opts {:method :get}
                                                   :->jwt-token ->jwt-token})
                                :crux.tx/tx-time)]
@@ -199,18 +199,18 @@
   (openDB [this valid-time tx-time] (.db this valid-time tx-time))
 
   (status [_]
-    (api-request-sync (str url "/status")
+    (api-request-sync (str url "/_crux/status")
                       {:http-opts {:method :get}
                        :->jwt-token ->jwt-token}))
 
   (attributeStats [_]
-    (api-request-sync (str url "/attribute-stats")
+    (api-request-sync (str url "/_crux/attribute-stats")
                       {:http-opts {:method :get}
                        :->jwt-token ->jwt-token}))
 
   (submitTx [_ tx-ops]
     (try
-      (api-request-sync (str url "/tx-log")
+      (api-request-sync (str url "/_crux/tx-log")
                         {:body tx-ops
                          :->jwt-token ->jwt-token})
       (catch Exception e
@@ -222,14 +222,14 @@
 
   (hasTxCommitted [_ submitted-tx]
     (->
-     (api-request-sync (str url "/tx-committed")
+     (api-request-sync (str url "/_crux/tx-committed")
                        {:http-opts {:method :get
                                     :query-params {:tx-id (:crux.tx/tx-id submitted-tx)}}
                         :->jwt-token ->jwt-token})
      (get :tx-committed?)))
 
   (openTxLog [this after-tx-id with-ops?]
-    (let [in (api-request-sync (str url "/tx-log")
+    (let [in (api-request-sync (str url "/_crux/tx-log")
                                {:http-opts {:method :get
                                             :as :stream
                                             :query-params {:after-tx-id after-tx-id
@@ -241,7 +241,7 @@
 
   (sync [_ timeout]
     (->
-     (api-request-sync (str url "/sync")
+     (api-request-sync (str url "/_crux/sync")
                        {:http-opts {:method :get
                                     :query-params {:timeout (some-> timeout (cio/format-duration-millis))}}
                         :->jwt-token ->jwt-token})
@@ -249,7 +249,7 @@
 
   (awaitTxTime [_ tx-time timeout]
     (->
-     (api-request-sync (str url "/await-tx-time" )
+     (api-request-sync (str url "/_crux/await-tx-time" )
                        {:http-opts {:method :get
                                     :query-params {:tx-time (cio/format-rfc3339-date tx-time)
                                                    :timeout (some-> timeout (cio/format-duration-millis))}}
@@ -257,7 +257,7 @@
      (get :crux.tx/tx-time)))
 
   (awaitTx [_ tx timeout]
-    (api-request-sync (str url "/await-tx" )
+    (api-request-sync (str url "/_crux/await-tx" )
                       {:http-opts {:method :get
                                    :query-params {:tx-id (:crux.tx/tx-id tx)
                                                   :timeout (some-> timeout (cio/format-duration-millis))}}
@@ -267,29 +267,29 @@
     (throw (UnsupportedOperationException. "crux/listen not supported on remote clients")))
 
   (latestCompletedTx [_]
-    (api-request-sync (str url "/latest-completed-tx")
+    (api-request-sync (str url "/_crux/latest-completed-tx")
                       {:http-opts {:method :get}
                        :->jwt-token ->jwt-token}))
 
   (latestSubmittedTx [_]
-    (api-request-sync (str url "/latest-submitted-tx")
+    (api-request-sync (str url "/_crux/latest-submitted-tx")
                       {:http-opts {:method :get}
                        :->jwt-token ->jwt-token}))
 
   (activeQueries [_]
-    (->> (api-request-sync (str url "/active-queries")
+    (->> (api-request-sync (str url "/_crux/active-queries")
                            {:http-opts {:method :get}
                             :->jwt-token ->jwt-token})
          (map qs/->QueryState)))
 
   (recentQueries [_]
-    (->> (api-request-sync (str url "/recent-queries")
+    (->> (api-request-sync (str url "/_crux/recent-queries")
                            {:http-opts {:method :get}
                             :->jwt-token ->jwt-token})
          (map qs/->QueryState)))
 
   (slowestQueries [_]
-    (->> (api-request-sync (str url "/slowest-queries")
+    (->> (api-request-sync (str url "/_crux/slowest-queries")
                            {:http-opts {:method :get}
                             :->jwt-token ->jwt-token})
          (map qs/->QueryState)))

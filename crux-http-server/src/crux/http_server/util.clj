@@ -107,7 +107,7 @@
            [:body
             [:nav.header
              [:div.crux-logo
-              [:a {:href "/query"}
+              [:a {:href "/_crux/query"}
                [:img.crux-logo__img {:src "/crux-horizontal-bw.svg.png" }]]]
              [:span.mobile-hidden
               [:b (when-let [label (get-in options [:node-options :server-label])] label)]]

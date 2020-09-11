@@ -49,7 +49,7 @@
      "Entity ID"]
     [:div.entity-editor__contents
      [:form
-      {:action "/entity"}
+      {:action "/_crux/entity"}
       [:textarea.textarea
        {:name "eid"
         :placeholder "Enter an entity ID, found under the `:crux.db/id` key inside your documents"
@@ -152,28 +152,28 @@
     (encode-to-bytes [_ {:keys [eid no-entity? not-found? cause entity ^Closeable entity-history] :as res} charset]
       (let [^String resp (cond
                            no-entity? (util/raw-html {:body (entity-root-html)
-                                                      :title "/entity"
+                                                      :title "/_crux/entity"
                                                       :options opts})
                            not-found? (let [not-found-message (str eid " entity not found")]
-                                        (util/raw-html {:title "/entity"
+                                        (util/raw-html {:title "/_crux/entity"
                                                         :body [:div.error-box not-found-message]
                                                         :options opts
                                                         :results {:entity-results
                                                                   {"error" not-found-message}}}))
-                           cause (util/raw-html {:title "/entity"
+                           cause (util/raw-html {:title "/_crux/entity"
                                                  :body [:div.error-box cause]
                                                  :options opts
                                                  :results {:entity-results
                                                            {"error" cause}}})
                            entity-history (try
                                             (util/raw-html {:body (entity-history->html res)
-                                                            :title "/entity?history=true"
+                                                            :title "/_crux/entity?history=true"
                                                             :options opts
                                                             :results {:entity-results (iterator-seq entity-history)}})
                                             (finally
                                               (.close entity-history)))
                            :else (util/raw-html {:body (entity->html res)
-                                                 :title "/entity"
+                                                 :title "/_crux/entity"
                                                  :options opts
                                                  :results {:entity-results entity}}))]
         (.getBytes resp ^String charset)))))

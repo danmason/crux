@@ -209,32 +209,32 @@
 
 (defn- handler [{:keys [crux-node ::read-only?] :as options}]
   (let [query-muuntaja (query/->query-muuntaja options)]
-    [["/" {:get (fn [_] (redirect-response "/query"))}]
-     ["/status" {:get (status/status options)}]
-     ["/entity" {:muuntaja (entity/->entity-muuntaja options)
+    [["/" {:get (fn [_] (redirect-response "/_crux/query"))}]
+     ["/_crux/status" {:get (status/status options)}]
+     ["/_crux/entity" {:muuntaja (entity/->entity-muuntaja options)
                  :get (entity/entity-state options)
                  :parameters {:query ::entity/query-params}}]
-     ["/query" {:muuntaja query-muuntaja
+     ["/_crux/query" {:muuntaja query-muuntaja
                 :get (query/data-browser-query options)
                 :parameters {:query ::query/query-params}}]
-     ["/query.csv" {:muuntaja query-muuntaja
+     ["/_crux/query.csv" {:muuntaja query-muuntaja
                     :get (query/data-browser-query options)
                     :parameters {:query ::query/query-params}
                     :middleware [[add-response-format "text/csv"]]}]
-     ["/query.tsv" {:muuntaja query-muuntaja
+     ["/_crux/query.tsv" {:muuntaja query-muuntaja
                     :get (query/data-browser-query options)
                     :parameters {:query ::query/query-params}
                     :middleware [[add-response-format "text/tsv"]]}]
-     ["/entity-tx" {:get (entity-tx crux-node)
+     ["/_crux/entity-tx" {:get (entity-tx crux-node)
                     :parameters {:query ::entity-tx-spec}}]
-     ["/attribute-stats" {:get (attribute-stats crux-node)}]
-     ["/sync" {:get (sync-handler crux-node)
+     ["/_crux/attribute-stats" {:get (attribute-stats crux-node)}]
+     ["/_crux/sync" {:get (sync-handler crux-node)
                :parameters {:query ::sync-spec}}]
-     ["/await-tx" {:get (await-tx-handler crux-node)
+     ["/_crux/await-tx" {:get (await-tx-handler crux-node)
                    :parameters {:query ::await-tx-spec}}]
-     ["/await-tx-time" {:get (await-tx-time-handler crux-node)
+     ["/_crux/await-tx-time" {:get (await-tx-time-handler crux-node)
                         :parameters {:query ::await-tx-time-spec}}]
-     ["/tx-log" {:get {:muuntaja util/output-stream-muuntaja
+     ["/_crux/tx-log" {:get {:muuntaja util/output-stream-muuntaja
                        :handler (tx-log crux-node)
                        :parameters {:query ::tx-log-spec}}
                  :post {:handler (if read-only?
@@ -242,14 +242,14 @@
                                                (resp/status 403)))
                                    (transact crux-node))
                         :parameters {:body ::transact-spec}}}]
-     ["/tx-committed" {:get (tx-committed? crux-node)
+     ["/_crux/tx-committed" {:get (tx-committed? crux-node)
                        :parameters {:query ::tx-committed-spec}}]
-     ["/latest-completed-tx" {:get (latest-completed-tx crux-node)}]
-     ["/latest-submitted-tx" {:get (latest-submitted-tx crux-node)}]
-     ["/active-queries" {:get (active-queries crux-node)}]
-     ["/recent-queries" {:get (recent-queries crux-node)}]
-     ["/slowest-queries" {:get (slowest-queries crux-node)}]
-     ["/sparql" {:get (sparqql crux-node)
+     ["/_crux/latest-completed-tx" {:get (latest-completed-tx crux-node)}]
+     ["/_crux/latest-submitted-tx" {:get (latest-submitted-tx crux-node)}]
+     ["/_crux/active-queries" {:get (active-queries crux-node)}]
+     ["/_crux/recent-queries" {:get (recent-queries crux-node)}]
+     ["/_crux/slowest-queries" {:get (slowest-queries crux-node)}]
+     ["/_crux/sparql" {:get (sparqql crux-node)
                   :post (sparqql crux-node)}]]))
 
 (def ^:const default-server-port 3000)

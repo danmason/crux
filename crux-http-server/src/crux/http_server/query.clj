@@ -91,7 +91,7 @@
       "Datalog query editor"]
     [:div.query-editor__contents
      [:form
-      {:action "/query"}
+      {:action "/_crux/query"}
       [:textarea.textarea
        {:name "q"
         :rows 10
@@ -152,7 +152,7 @@
 
 (defn resolve-prev-next-offset
   [query-params prev-offset next-offset]
-  (let [url (str "/query?"
+  (let [url (str "/_crux/query?"
                  (subs
                   (->> (dissoc query-params "offset")
                        (reduce-kv (fn [coll k v]
@@ -222,16 +222,16 @@
       (try
         (let [^String resp (cond
                              no-query? (util/raw-html {:body (query-root-html opts)
-                                                       :title "/query"
+                                                       :title "/_crux/query"
                                                        :options opts})
-                             cause (util/raw-html {:title "/query"
+                             cause (util/raw-html {:title "/_crux/query"
                                                    :body [:div.error-box cause]
                                                    :options opts
                                                    :results {:query-results
                                                              {"error" cause}}})
                              :else (let [results (iterator-seq results)]
                                      (util/raw-html {:body (query->html (assoc res :results (drop-last results)))
-                                                     :title "/query"
+                                                     :title "/_crux/query"
                                                      :options opts
                                                      :results {:query-results results}})))]
           (.getBytes resp ^String charset))

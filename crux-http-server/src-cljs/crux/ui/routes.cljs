@@ -4,22 +4,22 @@
 
 (def routes
   [""
-   ["/attribute-stats"
+   ["/_crux/attribute-stats"
     {:name :attribute-stats}]
-   ["/status"
+   ["/_crux/status"
     {:name :status
      :link-text "Status"
      :controllers
      [{:start #(do
                  (rf/dispatch [:crux.ui.http/fetch-node-status])
                  (rf/dispatch [:crux.ui.http/fetch-node-attribute-stats]))}]}]
-   ["/query"
+   ["/_crux/query"
     {:name :query
      :link-text "Query"
      :controllers
      [{:identity #(gensym)
        :start #(rf/dispatch [:crux.ui.http/fetch-query-table])}]}]
-   ["/entity"
+   ["/_crux/entity"
     {:name :entity
      :link-text "Entity"
      :controllers
