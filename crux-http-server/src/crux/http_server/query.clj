@@ -27,19 +27,31 @@
   (st/spec
    {:spec #(s/valid? ::q/query %)
     :type :map
-    :decode/string (fn [_ q] (cond-> q (string? q) edn/read-string))}))
+    :decode/string (fn [_ q]
+                     (try
+                       (cond-> q (string? q) edn/read-string)
+                       (catch Exception e
+                         e)))}))
 
 (s/def ::find
   (st/spec
    {:spec #(s/valid? ::q/find %)
     :type :vector
-    :decode/string (fn [_ find] (edn/read-string find))}))
+    :decode/string (fn [_ find]
+                     (try
+                       (edn/read-string find)
+                       (catch Exception e
+                         e)))}))
 
 (defn vectorize-spec [spec]
   (st/spec
    {:spec #(s/valid? spec %)
     :type :vector
-    :decode/string (fn [_ param] (mapv edn/read-string (if (coll? param) param [param])))}))
+    :decode/string (fn [_ param]
+                     (try
+                       (mapv edn/read-string (if (coll? param) param [param]))
+                       (catch Exception e
+                         e)))}))
 
 (s/def ::where
   (vectorize-spec ::q/where))
@@ -194,30 +206,29 @@
 
 (defn- ->*sv-encoder [{:keys [sep]}]
   (reify mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [results query error]} charset]
+    (encode-to-output-stream [_ {:keys [results query cause] :as res} charset]
       (fn [^OutputStream output-stream]
         (with-open [w (io/writer output-stream)]
           (try
-            (if error
-              (.write w ^String error)
+            (if cause
+              (.write w (pr-str res))
               (csv/write-csv w (cons (:find query) (iterator-seq results)) :separator sep))
             (finally
               (cio/try-close results))))))))
 
 (defn ->html-encoder [opts]
   (reify mfc/EncodeToBytes
-    (encode-to-bytes [_ {:keys [no-query? error results] :as res} charset]
+    (encode-to-bytes [_ {:keys [no-query? cause results] :as res} charset]
       (try
         (let [^String resp (cond
                              no-query? (util/raw-html {:body (query-root-html opts)
                                                        :title "/query"
                                                        :options opts})
-                             error (let [error-message (.getMessage ^Exception error)]
-                                     (util/raw-html {:title "/query"
-                                                     :body [:div.error-box error-message]
-                                                     :options opts
-                                                     :results {:query-results
-                                                               {"error" error-message}}}))
+                             cause (util/raw-html {:title "/query"
+                                                   :body [:div.error-box cause]
+                                                   :options opts
+                                                   :results {:query-results
+                                                             {"error" cause}}})
                              :else (let [results (iterator-seq results)]
                                      (util/raw-html {:body (query->html (assoc res :results (drop-last results)))
                                                      :title "/query"
@@ -230,12 +241,12 @@
 (defn ->edn-encoder [_]
   (reify
     mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [^Cursor results error] :as res} _]
+    (encode-to-output-stream [_ {:keys [^Cursor results cause] :as res} _]
       (fn [^OutputStream output-stream]
         (with-open [w (io/writer output-stream)]
           (try
             (cond
-              error (.write w ^String (pr-str res))
+              cause (.write w ^String (pr-str res))
               (and results (.hasNext results)) (print-method (iterator-seq results) w)
               :else (.write w ^String (pr-str '())))
             (finally
@@ -244,12 +255,12 @@
 (defn- ->tj-encoder [_]
   (reify
     mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [^Cursor results error] :as res} _]
+    (encode-to-output-stream [_ {:keys [^Cursor results cause] :as res} _]
       (fn [^OutputStream output-stream]
         (let [w (transit/writer output-stream :json {:handlers {EntityRef entity-ref/ref-write-handler}})]
           (try
             (cond
-              error (transit/write w res)
+              cause (transit/write w res)
               (and results (.hasNext results)) (transit/write w (iterator-seq results))
               :else (transit/write w '()))
             (finally
@@ -311,8 +322,8 @@
 
 (defn handle-error [{:keys [no-query? error]}]
   (cond
-    no-query? {:status 400, :body "No query provided."}
-    error {:status 400, :body {:error (.getMessage ^Exception error)}}))
+    no-query? (throw (IllegalArgumentException. "No query provided"))
+    error (throw error)))
 
 (defmethod transform-query-resp "text/csv" [{:keys [results query] :as res} req]
   (or (handle-error res)
@@ -326,8 +337,9 @@
           (with-download-header res "tsv"))))
 
 (defmethod transform-query-resp "text/html" [{:keys [error] :as res} _]
-  {:status (if error 400 200)
-   :body res})
+  (cond
+    error (throw error)
+    :else {:status 200 :body res}))
 
 (defmethod transform-query-resp :default [{:keys [results] :as res} _]
   (or (handle-error res)

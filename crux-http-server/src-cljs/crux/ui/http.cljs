@@ -67,7 +67,7 @@
  (fn [{:keys [db]} [_ result]]
    (prn "Failure: get query table result: " result)
    {:dispatch [:crux.ui.events/set-query-result-pane-loading false]
-    :db (assoc-in db [:query :error] (get-in result [:response :error]))}))
+    :db (assoc-in db [:query :error] (get-in result [:response :cause]))}))
 
 (rf/reg-event-fx
  ::fetch-node-status
@@ -163,5 +163,5 @@
  ::fail-fetch-entity
  (fn [{:keys [db]} [_ result]]
    (prn "Failure: fetch entity " result)
-   {:db (assoc-in db [:entity :error] (get-in result [:response :error]))
+   {:db (assoc-in db [:entity :error] (get-in result [:response :cause]))
     :dispatch [:crux.ui.events/set-entity-result-pane-loading false]}))

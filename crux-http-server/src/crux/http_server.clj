@@ -46,7 +46,7 @@
 
 (defn- exception-response [status ^Exception e]
   {:status status
-   :body (with-out-str (pp/pprint (Throwable->map e)))})
+   :body (Throwable->map e)})
 
 (defn- wrap-exception-handling [handler]
   (fn [request]
@@ -54,14 +54,22 @@
       (try
         (handler request)
         (catch Exception e
-          (if (or (instance? IllegalArgumentException e)
-                  (and (.getMessage e)
-                       (str/starts-with? (.getMessage e) "Spec assertion failed")))
+          (if (instance? IllegalArgumentException e)
             (exception-response 400 e) ;; Valid edn, invalid content
             (do (log/error e "Exception while handling request:" (cio/pr-edn-str request))
                 (exception-response 500 e))))) ;; Valid content; something internal failed, or content validity is not properly checked
       (catch Exception e
         (exception-response 400 e))))) ;;Invalid edn
+
+(defn- wrap-coercion-exception [handler]
+  (fn [request]
+    (try
+      (handler request)
+      (catch Exception e
+        (let [data (ex-data e)]
+          (if (= ::coercion/request-coercion (:type data))
+            (exception-response 400 (ex-info "Spec assertion failed" (coercion/encode-error data)))
+            (throw e)))))))
 
 (defn- add-last-modified [response date]
   (cond-> response
@@ -312,8 +320,9 @@
                     :coercion reitit.coercion.spec/coercion
                     :middleware
                     (cond->
-                        [wrap-exception-handling
-                         rm/format-middleware
+                        [rm/format-middleware
+                         wrap-exception-handling
+                         wrap-coercion-exception
                          p/wrap-params
                          rrc/coerce-request-middleware]
                       jwks (conj #(wrap-jwt % (JWKSet/parse jwks))))}})

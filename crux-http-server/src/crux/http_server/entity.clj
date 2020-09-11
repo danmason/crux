@@ -152,7 +152,7 @@
 
 (defn ->entity-html-encoder [opts]
   (reify mfc/EncodeToBytes
-    (encode-to-bytes [_ {:keys [eid no-entity? not-found? error entity ^Closeable entity-history] :as res} charset]
+    (encode-to-bytes [_ {:keys [eid no-entity? not-found? cause entity ^Closeable entity-history] :as res} charset]
       (let [^String resp (cond
                            no-entity? (util/raw-html {:body (entity-root-html)
                                                       :title "/entity"
@@ -163,12 +163,11 @@
                                                         :options opts
                                                         :results {:entity-results
                                                                   {"error" not-found-message}}}))
-                           error (let [error-message (.getMessage ^Exception error)]
-                                   (util/raw-html {:title "/entity"
-                                                   :body [:div.error-box error-message]
-                                                   :options opts
-                                                   :results {:entity-results
-                                                             {"error" error-message}}}))
+                           cause (util/raw-html {:title "/entity"
+                                                 :body [:div.error-box cause]
+                                                 :options opts
+                                                 :results {:entity-results
+                                                           {"error" cause}}})
                            entity-history (try
                                             (util/raw-html {:body (entity-history->html res)
                                                             :title "/entity?history=true"
@@ -185,35 +184,35 @@
 (defn ->edn-encoder [_]
   (reify
     mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [entity error ^Cursor entity-history] :as res} _]
+    (encode-to-output-stream [_ {:keys [entity ^Cursor entity-history] :as res} _]
       (fn [^OutputStream output-stream]
         (with-open [w (io/writer output-stream)]
           (cond
-            error (.write w ^String (pr-str res))
             entity-history (try
                              (if (.hasNext entity-history)
                                (print-method (iterator-seq entity-history) w)
                                (.write w ^String (pr-str '())))
                              (finally
                                (cio/try-close entity-history)))
-            :else (print-method entity w)))))))
+             entity (print-method entity w)
+            :else (.write w ^String (pr-str res))))))))
 
 (defn- ->tj-encoder [_]
   (reify
     mfc/EncodeToOutputStream
-    (encode-to-output-stream [_ {:keys [entity error ^Cursor entity-history] :as res} _]
+    (encode-to-output-stream [_ {:keys [entity ^Cursor entity-history] :as res} _]
       (fn [^OutputStream output-stream]
         (let [w (transit/writer output-stream :json {:handlers {EntityRef entity-ref/ref-write-handler
                                                                 Id util/crux-id-write-handler}})]
           (cond
-            error (transit/write w res)
+            entity (transit/write w entity)
             entity-history (try
                              (if (.hasNext entity-history)
                                (transit/write w (iterator-seq entity-history))
                                (transit/write w '()))
                              (finally
                                (cio/try-close entity-history)))
-            :else (transit/write w entity)))))))
+            :else (transit/write w res)))))))
 
 (defn ->entity-muuntaja [opts]
   (m/create (-> m/default-options
@@ -267,18 +266,19 @@
     (get-in req [:muuntaja/response :format])))
 
 (defmethod transform-query-resp "text/html" [{:keys [error no-entity? not-found? error] :as res} _]
-  {:status (cond
-             no-entity? 400
-             error 500
-             not-found? 404
-             :else 200)
-   :body res})
+  (cond
+    error (throw error)
+    :else {:status (cond
+                     no-entity? 400
+                     not-found? 404
+                     :else 200)
+           :body res}))
 
 (defmethod transform-query-resp :default [{:keys [error no-entity? eid not-found?] :as res} _]
   (cond
-    no-entity? {:status 400, :body {:error "Missing eid"}}
-    not-found? {:status 404, :body {:error (str eid " entity not found")}}
-    error {:status 500, :body {:error (.getMessage ^Exception error)}}
+    no-entity? (throw (IllegalArgumentException. "Missing eid"))
+    not-found? {:status 404, :body {:cause (str eid " entity not found")}}
+    error (throw error)
     :else {:status 200, :body res}))
 
 (defn entity-state [options]

@@ -19,7 +19,10 @@
 (s/def ::eid
   (st/spec
    {:spec c/valid-id?
-    :decode/string (fn [_ eid] (edn/read-string {:readers {'crux/id c/id-edn-reader}} (URLDecoder/decode eid)))}))
+    :decode/string (fn [_ eid] (try
+                                 (edn/read-string {:readers {'crux/id c/id-edn-reader}} (URLDecoder/decode eid))
+                                 (catch Exception e
+                                   e)))}))
 
 (s/def ::link-entities? boolean?)
 (s/def ::valid-time inst?)
