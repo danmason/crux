@@ -1,43 +1,31 @@
 (ns crux.http-server
   "HTTP API for Crux.
   The optional SPARQL handler requires juxt.crux/rdf."
-  (:require [clojure.instant :as instant]
-            [clojure.java.io :as io]
-            [clojure.pprint :as pp]
-            [clojure.set :as set]
-            [clojure.spec.alpha :as s]
-            [spec-tools.core :as st]
-            [clojure.string :as str]
+  (:require [clojure.spec.alpha :as s]
             [clojure.tools.logging :as log]
-            [clojure.walk :as walk]
             [crux.api :as crux]
-            [crux.codec :as c]
-            [crux.http-server.query :as query]
             [crux.http-server.entity :as entity]
+            [crux.http-server.query :as query]
             [crux.http-server.status :as status]
             [crux.http-server.util :as util]
             [crux.io :as cio]
             [crux.system :as sys]
             [crux.tx :as tx]
+            [reitit.coercion :as coercion]
+            reitit.coercion.spec
+            [reitit.ring :as rr]
+            [reitit.ring.coercion :as rrc]
+            [reitit.ring.middleware.muuntaja :as rm]
             [ring.adapter.jetty :as j]
             [ring.middleware.params :as p]
-            [ring.middleware.resource :refer [wrap-resource]]
-            [ring.util.io :as rio]
-            [ring.util.request :as req]
             [ring.util.response :as resp]
-            [ring.util.time :as rt]
-            [reitit.ring :as rr]
-            [reitit.coercion.spec]
-            [reitit.coercion :as coercion]
-            [reitit.ring.coercion :as rrc]
-            [reitit.ring.middleware.muuntaja :as rm])
+            [ring.util.time :as rt])
   (:import [com.nimbusds.jose.crypto ECDSAVerifier RSASSAVerifier]
            [com.nimbusds.jose.jwk ECKey JWKSet KeyType RSAKey]
            com.nimbusds.jwt.SignedJWT
            [crux.api ICruxAPI NodeOutOfSyncException]
            [java.io Closeable IOException]
-           [java.time Duration]
-           java.util.Date
+           java.time.Duration
            org.eclipse.jetty.server.Server))
 
 (defn- redirect-response [url]

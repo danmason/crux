@@ -1,20 +1,20 @@
 (ns crux.http-server.util
-  (:require [crux.io :as cio]
-            [crux.codec :as c]
-            [crux.api :as api]
-            [clojure.edn :as edn]
-            [cognitect.transit :as transit]
-            [hiccup2.core :as hiccup2]
+  (:require [clojure.edn :as edn]
             [clojure.spec.alpha :as s]
-            [spec-tools.core :as st]
+            [cognitect.transit :as transit]
+            [crux.api :as api]
+            [crux.codec :as c]
+            [crux.io :as cio]
+            [hiccup2.core :as hiccup2]
             [muuntaja.core :as m]
-            [muuntaja.format.core :as mfc])
+            [muuntaja.format.core :as mfc]
+            [spec-tools.core :as st])
   (:import [crux.api ICruxAPI ICruxDatasource]
-           [java.net URLEncoder URLDecoder]
-           [java.io OutputStream ByteArrayOutputStream]
+           crux.codec.Id
+           [java.io ByteArrayOutputStream OutputStream]
+           [java.net URLDecoder URLEncoder]
            java.time.format.DateTimeFormatter
-           java.util.Date
-           crux.codec.Id))
+           java.util.Date))
 
 (s/def ::eid
   (st/spec

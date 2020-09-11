@@ -1,20 +1,14 @@
 (ns ^:no-doc crux.remote-api-client
   (:require [clojure.edn :as edn]
-            [clojure.string :as str]
-            [crux.io :as cio]
-            [crux.db :as db]
+            [clojure.string :as string]
             [crux.codec :as c]
-            [crux.query-state :as qs]
-            [crux.query :as q]
-            [clojure.string :as string])
-  (:import (java.io Closeable InputStreamReader IOException PushbackReader)
-           (java.time Instant Duration)
-           java.util.Date
-           java.util.function.Supplier
-           com.nimbusds.jwt.SignedJWT
-           (crux.api Crux ICruxAPI ICruxDatasource NodeOutOfSyncException
-                     HistoryOptions HistoryOptions$SortOrder
-                     RemoteClientOptions)))
+            [crux.io :as cio]
+            [crux.query-state :as qs])
+  (:import com.nimbusds.jwt.SignedJWT
+           [crux.api HistoryOptions HistoryOptions$SortOrder ICruxAPI ICruxDatasource NodeOutOfSyncException RemoteClientOptions]
+           [java.io Closeable InputStreamReader IOException PushbackReader]
+           java.time.Instant
+           java.util.function.Supplier))
 
 (defn- edn-list->lazy-seq [in]
   (let [in (PushbackReader. (InputStreamReader. in))

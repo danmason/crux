@@ -1,8 +1,6 @@
 (ns crux.http-server.entity
-  (:require [clojure.edn :as edn]
-            [clojure.instant :as instant]
-            [clojure.java.io :as io]
-            [clojure.string :as string]
+  (:require [clojure.java.io :as io]
+            [clojure.spec.alpha :as s]
             [cognitect.transit :as transit]
             [crux.api :as crux]
             [crux.codec :as c]
@@ -10,12 +8,11 @@
             [crux.http-server.util :as util]
             [crux.io :as cio]
             [muuntaja.core :as m]
-            [muuntaja.format.core :as mfc]
-            [clojure.spec.alpha :as s])
-  (:import crux.http_server.entity_ref.EntityRef
-           crux.codec.Id
+            [muuntaja.format.core :as mfc])
+  (:import crux.codec.Id
+           crux.http_server.entity_ref.EntityRef
            crux.io.Cursor
-           (java.io Closeable OutputStream)
+           [java.io Closeable OutputStream]
            [java.time Instant ZonedDateTime ZoneId]
            java.time.format.DateTimeFormatter
            java.util.Date))
