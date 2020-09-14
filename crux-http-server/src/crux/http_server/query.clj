@@ -27,31 +27,23 @@
   (st/spec
    {:spec #(s/valid? ::q/query %)
     :type :map
-    :decode/string (fn [_ q]
-                     (try
-                       (cond-> q (string? q) edn/read-string)
-                       (catch Exception e
-                         e)))}))
+    :decode/string (fn [_ q] (util/try-decode-edn q))}))
 
 (s/def ::find
   (st/spec
    {:spec #(s/valid? ::q/find %)
     :type :vector
-    :decode/string (fn [_ find]
-                     (try
-                       (edn/read-string find)
-                       (catch Exception e
-                         e)))}))
+    :decode/string (fn [_ find] (util/try-decode-edn find))}))
 
 (defn vectorize-spec [spec]
   (st/spec
    {:spec #(s/valid? spec %)
     :type :vector
     :decode/string (fn [_ param]
-                     (try
-                       (mapv edn/read-string (if (coll? param) param [param]))
-                       (catch Exception e
-                         e)))}))
+                     (let [coll (mapv util/try-decode-edn (if (coll? param) param [param]))]
+                       (if (some #{::s/invalid} coll)
+                         ::s/invalid
+                         coll)))}))
 
 (s/def ::where
   (vectorize-spec ::q/where))

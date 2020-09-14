@@ -16,13 +16,17 @@
            java.time.format.DateTimeFormatter
            java.util.Date))
 
+(defn try-decode-edn [edn]
+  (try
+    (cond->> edn
+      (string? edn) (edn/read-string {:readers {'crux/id c/id-edn-reader}}))
+    (catch Exception e
+      ::s/invalid)))
+
 (s/def ::eid
   (st/spec
    {:spec c/valid-id?
-    :decode/string (fn [_ eid] (try
-                                 (edn/read-string {:readers {'crux/id c/id-edn-reader}} (URLDecoder/decode eid))
-                                 (catch Exception e
-                                   e)))}))
+    :decode/string (fn [_ eid] (try-decode-edn eid))}))
 
 (s/def ::link-entities? boolean?)
 (s/def ::valid-time inst?)
