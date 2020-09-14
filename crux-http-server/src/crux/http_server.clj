@@ -208,45 +208,45 @@
     [["/" {:get (fn [_] (resp/redirect "/_crux/query"))}]
      ["/_crux/status" {:get (status/status options)}]
      ["/_crux/entity" {:muuntaja (entity/->entity-muuntaja options)
-                 :get (entity/entity-state options)
-                 :parameters {:query ::entity/query-params}}]
+                       :get (entity/entity-state options)
+                       :parameters {:query ::entity/query-params}}]
      ["/_crux/query" {:muuntaja query-muuntaja
-                :get (query/data-browser-query options)
-                :parameters {:query ::query/query-params}}]
+                      :get (query/data-browser-query options)
+                      :parameters {:query ::query/query-params}}]
      ["/_crux/query.csv" {:muuntaja query-muuntaja
-                    :get (query/data-browser-query options)
-                    :parameters {:query ::query/query-params}
-                    :middleware [[add-response-format "text/csv"]]}]
+                          :get (query/data-browser-query options)
+                          :parameters {:query ::query/query-params}
+                          :middleware [[add-response-format "text/csv"]]}]
      ["/_crux/query.tsv" {:muuntaja query-muuntaja
-                    :get (query/data-browser-query options)
-                    :parameters {:query ::query/query-params}
-                    :middleware [[add-response-format "text/tsv"]]}]
+                          :get (query/data-browser-query options)
+                          :parameters {:query ::query/query-params}
+                          :middleware [[add-response-format "text/tsv"]]}]
      ["/_crux/entity-tx" {:get (entity-tx crux-node)
-                    :parameters {:query ::entity-tx-spec}}]
+                          :parameters {:query ::entity-tx-spec}}]
      ["/_crux/attribute-stats" {:get (attribute-stats crux-node)}]
      ["/_crux/sync" {:get (sync-handler crux-node)
-               :parameters {:query ::sync-spec}}]
+                     :parameters {:query ::sync-spec}}]
      ["/_crux/await-tx" {:get (await-tx-handler crux-node)
-                   :parameters {:query ::await-tx-spec}}]
+                         :parameters {:query ::await-tx-spec}}]
      ["/_crux/await-tx-time" {:get (await-tx-time-handler crux-node)
-                        :parameters {:query ::await-tx-time-spec}}]
+                              :parameters {:query ::await-tx-time-spec}}]
      ["/_crux/tx-log" {:get {:muuntaja util/output-stream-muuntaja
-                       :handler (tx-log crux-node)
-                       :parameters {:query ::tx-log-spec}}
-                 :post {:handler (if read-only?
-                                   (fn [_] {:status 403
-                                            :body "forbidden: read-only HTTP node"})
-                                   (transact crux-node))
-                        :parameters {:body ::transact-spec}}}]
+                             :handler (tx-log crux-node)
+                             :parameters {:query ::tx-log-spec}}
+                       :post {:handler (if read-only?
+                                         (fn [_] {:status 403
+                                                  :body "forbidden: read-only HTTP node"})
+                                         (transact crux-node))
+                              :parameters {:body ::transact-spec}}}]
      ["/_crux/tx-committed" {:get (tx-committed? crux-node)
-                       :parameters {:query ::tx-committed-spec}}]
+                             :parameters {:query ::tx-committed-spec}}]
      ["/_crux/latest-completed-tx" {:get (latest-completed-tx crux-node)}]
      ["/_crux/latest-submitted-tx" {:get (latest-submitted-tx crux-node)}]
      ["/_crux/active-queries" {:get (active-queries crux-node)}]
      ["/_crux/recent-queries" {:get (recent-queries crux-node)}]
      ["/_crux/slowest-queries" {:get (slowest-queries crux-node)}]
      ["/_crux/sparql" {:get (sparqql crux-node)
-                  :post (sparqql crux-node)}]]))
+                       :post (sparqql crux-node)}]]))
 
 (def ^:const default-server-port 3000)
 
