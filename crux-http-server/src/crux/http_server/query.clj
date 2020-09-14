@@ -140,23 +140,6 @@
                              (cond-> el
                                (get entity-links el) (entity-ref/->EntityRef))))))))))
 
-
-
-(defn resolve-prev-next-offset
-  [query-params prev-offset next-offset]
-  (let [url (str "/_crux/query?"
-                 (subs
-                  (->> (dissoc query-params "offset")
-                       (reduce-kv (fn [coll k v]
-                                    (if (vector? v)
-                                      (apply str coll (mapv #(str "&" k "=" %) v))
-                                      (str coll "&" k "=" v))) ""))
-                  1))
-        prev-url (when prev-offset (str url "&offset=" prev-offset))
-        next-url (when next-offset (str url "&offset=" next-offset))]
-    {:prev-url prev-url
-     :next-url next-url}))
-
 (defn query->html [{:keys [results query] :as res}]
   (let [headers (:find query)]
     [:body
@@ -222,7 +205,7 @@
                                                    :results {:query-results
                                                              {"error" cause}}})
                              :else (let [results (iterator-seq results)]
-                                     (util/raw-html {:body (query->html (assoc res :results (drop-last results)))
+                                     (util/raw-html {:body (query->html (assoc res :results results))
                                                      :title "/_crux/query"
                                                      :options opts
                                                      :results {:query-results results}})))]
@@ -282,7 +265,6 @@
 (defmethod transform-query-req "text/html" [query req]
   (-> query
       (dissoc :full-results)
-      (update :limit #(if % (inc %) 101))
       (assoc :link-entities? true)))
 
 (defmethod transform-query-req "text/csv" [query req]
