@@ -230,14 +230,14 @@
                          :parameters {:query ::await-tx-spec}}]
      ["/_crux/await-tx-time" {:get (await-tx-time-handler crux-node)
                               :parameters {:query ::await-tx-time-spec}}]
-     ["/_crux/tx-log" {:get {:muuntaja util/output-stream-muuntaja
-                             :handler (tx-log crux-node)
-                             :parameters {:query ::tx-log-spec}}
-                       :post {:handler (if read-only?
-                                         (fn [_] {:status 403
-                                                  :body "forbidden: read-only HTTP node"})
-                                         (transact crux-node))
-                              :parameters {:body ::transact-spec}}}]
+     ["/_crux/tx-log" {:get (tx-log crux-node)
+                       :muuntaja util/output-stream-muuntaja
+                       :parameters {:query ::tx-log-spec}}]
+     ["/_crux/submit-tx" {:post (if read-only?
+                                  (fn [_] {:status 403
+                                           :body "forbidden: read-only HTTP node"})
+                                  (transact crux-node))
+                          :parameters {:body ::transact-spec}}]
      ["/_crux/tx-committed" {:get (tx-committed? crux-node)
                              :parameters {:query ::tx-committed-spec}}]
      ["/_crux/latest-completed-tx" {:get (latest-completed-tx crux-node)}]

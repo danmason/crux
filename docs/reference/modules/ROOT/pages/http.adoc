@@ -260,8 +260,8 @@ curl -X GET $CRUX_URL/_crux/tx-log
 * `after-tx-id` (integer, default unbounded): transaction id to start after.
 * `with-ops?` (boolean, defaults to false): should the operations with documents be included?
 
-[#tx-log-post]
-=== POST `/_crux/tx-log`
+[#submit-tx]
+=== POST `/_crux/submit-tx`
 
 Takes a vector of transactions (any combination of `:put`, `:delete`, `:match`, and `:evict`) and executes them in order. This is the only "write" endpoint.
 
@@ -272,7 +272,7 @@ curl -X POST \
      -d '[[:crux.tx/put {:crux.db/id :ivan, :name "Ivan" :last-name "Petrov"}],
           [:crux.tx/put {:crux.db/id :boris, :name "Boris" :last-name "Petrov"}],
           [:crux.tx/delete :maria  #inst "2012-05-07T14:57:08.462-00:00"]]' \
-     $CRUX_URL/_crux/tx-log
+     $CRUX_URL/_crux/submit-tx
 ----
 
 === GET `/_crux/tx-committed`

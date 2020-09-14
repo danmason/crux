@@ -35,7 +35,7 @@
 
 (t/deftest test-ui-routes
   ;; Insert data
-  (let [{:keys [crux.tx/tx-id crux.tx/tx-time] :as tx} (-> (http/post (str *api-url* "/_crux/tx-log")
+  (let [{:keys [crux.tx/tx-id crux.tx/tx-time] :as tx} (-> (http/post (str *api-url* "/_crux/submit-tx")
                                                                       {:content-type :edn
                                                                        :body (pr-str '[[:crux.tx/put {:crux.db/id :ivan, :linking :peter}]
                                                                                        [:crux.tx/put {:crux.db/id :peter, :name "Peter"}]])
