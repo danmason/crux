@@ -28,10 +28,6 @@
            java.time.Duration
            org.eclipse.jetty.server.Server))
 
-(defn- redirect-response [url]
-  {:status 302
-   :headers {"Location" url}})
-
 (defn- exception-response [status ^Exception e]
   {:status status
    :body (Throwable->map e)})
@@ -209,7 +205,7 @@
 
 (defn- handler [{:keys [crux-node ::read-only?] :as options}]
   (let [query-muuntaja (query/->query-muuntaja options)]
-    [["/" {:get (fn [_] (redirect-response "/_crux/query"))}]
+    [["/" {:get (fn [_] (resp/redirect "/_crux/query"))}]
      ["/_crux/status" {:get (status/status options)}]
      ["/_crux/entity" {:muuntaja (entity/->entity-muuntaja options)
                  :get (entity/entity-state options)
@@ -238,8 +234,8 @@
                        :handler (tx-log crux-node)
                        :parameters {:query ::tx-log-spec}}
                  :post {:handler (if read-only?
-                                   (fn [_] (-> (resp/response "forbidden: read-only HTTP node")
-                                               (resp/status 403)))
+                                   (fn [_] {:status 403
+                                            :body "forbidden: read-only HTTP node"})
                                    (transact crux-node))
                         :parameters {:body ::transact-spec}}}]
      ["/_crux/tx-committed" {:get (tx-committed? crux-node)
