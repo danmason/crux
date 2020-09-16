@@ -206,7 +206,8 @@
 (defn- handler [{:keys [crux-node ::read-only?] :as options}]
   (let [query-muuntaja (query/->query-muuntaja options)]
     [["/" {:get (fn [_] (resp/redirect "/_crux/query"))}]
-     ["/_crux/status" {:get (status/status options)}]
+     ["/_crux/status" {:muuntaja (status/->status-muuntaja options)
+                       :get (status/status options)}]
      ["/_crux/entity" {:muuntaja (entity/->entity-muuntaja options)
                        :get (entity/entity-state options)
                        :parameters {:query ::entity/query-params}}]
