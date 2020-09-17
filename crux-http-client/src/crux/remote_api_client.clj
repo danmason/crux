@@ -11,21 +11,19 @@
            java.util.function.Supplier))
 
 (defn- edn-list->lazy-seq [in]
-  (let [in (PushbackReader. (InputStreamReader. in))
-        open-paren \(]
-    (let [first-char (.read in)]
-      (when-not (= (int open-paren) first-char)
-        (if (= first-char -1)
-          nil
-          (throw (RuntimeException. "Expected delimiter: (")))))
-    (->> (repeatedly #(try
-                        (edn/read {:readers {'crux/id c/id-edn-reader}
-                                   :eof ::eof} in)
-                        (catch RuntimeException e
-                          (if (= "Unmatched delimiter: )" (.getMessage e))
-                            ::eof
-                            (throw e)))))
-         (take-while #(not= ::eof %)))))
+  (let [in (PushbackReader. (InputStreamReader. in))]
+    (condp = (.read in)
+      -1 nil
+      (int \() (->> (repeatedly #(try
+                                   (edn/read {:readers {'crux/id c/id-edn-reader}
+                                              :eof ::eof} in)
+                                   (catch RuntimeException e
+                                     (if (= "Unmatched delimiter: )" (.getMessage e))
+                                       ::eof
+                                       (throw e)))))
+                    (take-while #(not= ::eof %)))
+
+      (throw (RuntimeException. "Expected delimiter: (")))))
 
 (def ^{:doc "Can be rebound using binding or alter-var-root to a
   function that takes a request map and returns a response
@@ -221,12 +219,11 @@
           (throw e)))))
 
   (hasTxCommitted [_ submitted-tx]
-    (->
-     (api-request-sync (str url "/_crux/tx-committed")
-                       {:http-opts {:method :get
-                                    :query-params {:tx-id (:crux.tx/tx-id submitted-tx)}}
-                        :->jwt-token ->jwt-token})
-     (get :tx-committed?)))
+    (-> (api-request-sync (str url "/_crux/tx-committed")
+                          {:http-opts {:method :get
+                                       :query-params {:tx-id (:crux.tx/tx-id submitted-tx)}}
+                           :->jwt-token ->jwt-token})
+        (get :tx-committed?)))
 
   (openTxLog [this after-tx-id with-ops?]
     (let [in (api-request-sync (str url "/_crux/tx-log")
@@ -240,24 +237,22 @@
                     (edn-list->lazy-seq in))))
 
   (sync [_ timeout]
-    (->
-     (api-request-sync (str url "/_crux/sync")
-                       {:http-opts {:method :get
-                                    :query-params {:timeout (some-> timeout (cio/format-duration-millis))}}
-                        :->jwt-token ->jwt-token})
-     (get :crux.tx/tx-time)))
+    (-> (api-request-sync (str url "/_crux/sync")
+                          {:http-opts {:method :get
+                                       :query-params {:timeout (some-> timeout (cio/format-duration-millis))}}
+                           :->jwt-token ->jwt-token})
+        (get :crux.tx/tx-time)))
 
   (awaitTxTime [_ tx-time timeout]
-    (->
-     (api-request-sync (str url "/_crux/await-tx-time" )
-                       {:http-opts {:method :get
-                                    :query-params {:tx-time (cio/format-rfc3339-date tx-time)
-                                                   :timeout (some-> timeout (cio/format-duration-millis))}}
-                        :->jwt-token ->jwt-token})
-     (get :crux.tx/tx-time)))
+    (-> (api-request-sync (str url "/_crux/await-tx-time" )
+                          {:http-opts {:method :get
+                                       :query-params {:tx-time (cio/format-rfc3339-date tx-time)
+                                                      :timeout (some-> timeout (cio/format-duration-millis))}}
+                           :->jwt-token ->jwt-token})
+        (get :crux.tx/tx-time)))
 
   (awaitTx [_ tx timeout]
-    (api-request-sync (str url "/_crux/await-tx" )
+    (api-request-sync (str url "/_crux/await-tx")
                       {:http-opts {:method :get
                                    :query-params {:tx-id (:crux.tx/tx-id tx)
                                                   :timeout (some-> timeout (cio/format-duration-millis))}}

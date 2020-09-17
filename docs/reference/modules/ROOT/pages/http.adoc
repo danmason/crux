@@ -1,6 +1,6 @@
 = HTTP
 
-Crux offers a REST API layer in the `crux-http-server` module that allows you to send transactions and run queries over HTTP. (See the REST API reference xref:http-api.adoc[here])
+Crux offers a REST API layer in the `crux-http-server` module that allows you to send transactions and run queries over HTTP.
 
 image::remote-cluster-mode.svg?sanitize=true[Remote Cluster Mode,450,145,align="centre"]
 
@@ -76,7 +76,8 @@ include::example$src/docs/examples.clj[tags=start-http-client]
 [#rest-api]
 == Using the REST API
 
-All of the REST endpoints return both `application/edn` and `application/transit+json` (see transit https://github.com/cognitect/transit-clj[here]) - individual endpoints may return additional types - see the docs below. To set up your node to with the REST API, see the xref:http.adoc[HTTP Feature Module].
+All of the REST endpoints return both `application/edn` and https://github.com/cognitect/transit-clj[`application/transit+json`].
+Individual endpoints may return additional types - see their docs below.
 
 [#status]
 === GET `/_crux/status`
@@ -122,9 +123,11 @@ curl -X GET \
      $CRUX_URL/_crux/entity?eid=:tommy&history=true&sort-order=asc
 ----
 
+==== Query Parameters
+
 .*Required Parameters*
 * `eid` (Crux ID)
-* `sort-order` (_required_, either `asc` or `desc`)
+* `sort-order` (either `asc` or `desc`)
 
 .*Optional Parameters*
 * `with-corrections` (boolean, default false): includes bitemporal corrections in the response, inline, orted by valid-time then transaction-time
@@ -169,7 +172,7 @@ curl -g \
 ==== Query Parameters
 
 .*Required Parameters*
-* `q` (URL Encoded datalog query)
+* `q` (URL encoded datalog query)
 
 .*Optional Parameters*
 * `valid-time` (date, defaulting to now)

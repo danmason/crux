@@ -186,9 +186,7 @@
         (with-open [w (io/writer output-stream)]
           (cond
             entity-history (try
-                             (if (.hasNext entity-history)
-                               (print-method (iterator-seq entity-history) w)
-                               (.write w ^String (pr-str '())))
+                             (print-method (or (iterator-seq entity-history) '()) w)
                              (finally
                                (cio/try-close entity-history)))
              entity (print-method entity w)
@@ -204,9 +202,7 @@
           (cond
             entity (transit/write w entity)
             entity-history (try
-                             (if (.hasNext entity-history)
-                               (transit/write w (iterator-seq entity-history))
-                               (transit/write w '()))
+                             (transit/write w (or (iterator-seq entity-history) '()))
                              (finally
                                (cio/try-close entity-history)))
             :else (transit/write w res)))))))
@@ -236,7 +232,7 @@
                         :end {:crux.db/valid-time end-valid-time
                               :crux.tx/tx-time end-transaction-time}}
           entity-history (crux/open-entity-history db eid sort-order history-opts)]
-      {:entity-history (cio/fmap-cursor identity entity-history)})
+      {:entity-history entity-history})
     (catch Exception e
       {:error e})))
 

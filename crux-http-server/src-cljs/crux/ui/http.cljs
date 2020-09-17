@@ -14,7 +14,7 @@
   (map->ResponseFormat {:read (fn [xhrio]
                                 (edn/read-string
                                  {:readers {'crux.http/entity-ref entity-ref/->EntityRef
-                                            'crux/id #(str %)}}
+                                            'crux/id str}}
                                  (-body xhrio)))
                         :description "EDN"
                         :content-type ["application/edn"]}))
