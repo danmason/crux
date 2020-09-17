@@ -54,9 +54,12 @@
 (s/def ::order-by
   (vectorize-spec ::q/order-by))
 
+(s/def ::rules
+  (vectorize-spec ::q/rules))
+
 ;; TODO: Need to ensure all query clasues are present + coerced properly
 (s/def ::query-params
-  (s/keys :opt-un [::util/valid-time ::util/transaction-time ::util/link-entities? ::q ::find ::where ::args ::order-by ::q/offset ::q/limit ::q/full-results?]))
+  (s/keys :opt-un [::util/valid-time ::util/transaction-time ::util/link-entities? ::q ::find ::where ::args ::order-by ::rules ::q/offset ::q/limit ::q/full-results? ::q/timeout ::q/batch-size]))
 
 (def query-root-str
   (string/join "\n"
@@ -112,17 +115,16 @@
        {:type "submit"}
        "Submit Query"]]]]])
 
-(defn- vectorize-param [param]
-  (if (vector? param) param [param]))
-
-
-;; TODO: Doesn't support all clauses a query can have - should do.
-(defn- build-query [{:keys [find where args order-by limit offset full-results link-entities?]}]
+(defn- build-query [{:keys [find where args timeout batch-size rules
+                            order-by limit offset full-results link-entities?]}]
   (let [new-offset (or offset 0)]
     (cond-> {:find find
              :where where
              :offset new-offset}
       args (assoc :args args)
+      rules (assoc :rules rules)
+      timeout (assoc :timeout timeout)
+      batch-size (assoc :batch-size batch-size)
       order-by (assoc :order-by order-by)
       limit (assoc :limit limit)
       full-results (assoc :full-results? true)

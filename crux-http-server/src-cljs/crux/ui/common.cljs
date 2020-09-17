@@ -78,7 +78,7 @@
   (->> edn
        (map
         (fn [[k v]]
-          [k (if (or (= :where k) (= :args k) (= :order-by k))
+          [k (if (or (= :where k) (= :args k) (= :order-by k) (= :rules k))
                (mapv str v)
                (str v))]))
        (into {})))
