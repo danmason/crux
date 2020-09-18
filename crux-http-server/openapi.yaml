@@ -1,0 +1,211 @@
+openapi: 3.0.0
+info:
+  version: 20.09-1.12.0
+  title: Crux HTTP API
+  description: The REST API of the Crux HTTP Server
+paths:
+  /_crux/status:
+    get:
+      summary: Returns the current status information of the node.
+      responses:
+        '200':
+          description: Object containing the status of the node
+          content:
+            application/edn:
+              schema:
+                $ref: "#/components/schemas/status"
+            application/transit+json:
+              schema:
+                $ref: "#/components/schemas/status"
+  /_crux/entity:
+    get:
+      summary: Returns data about a specific entity.
+      parameters:
+        - in: query
+          name: eid
+          required: true
+          schema:
+            $ref: "#/components/schemas/cruxID"
+        - in: query
+          name: valid-time
+          schema:
+            $ref: "#/components/schemas/validTime"
+        - in: query
+          name: transaction-time
+          schema:
+            $ref: "#/components/schemas/transactionTime"
+        - in: query
+          name: history
+          schema:
+            type: boolean
+        - in: query
+          name: sort-order
+          schema:
+            type: string
+            enum: [asc, desc]
+        - in: query
+          name: with-corrections
+          schema:
+            type: boolean
+        - in: query
+          name: with-docs
+          schema:
+            type: boolean
+        - in: query
+          name: start-valid-time
+          schema:
+            $ref: "#/components/schemas/validTime"
+        - in: query
+          name: start-transaction-time
+          schema:
+            $ref: "#/components/schemas/transactionTime"
+        - in: query
+          name: end-valid-time
+          schema:
+            $ref: "#/components/schemas/validTime"
+        - in: query
+          name: end-transaction-time
+          schema:
+            $ref: "#/components/schemas/transactionTime"
+      responses:
+        '200':
+          description: Information about an entity
+          content:
+            application/edn:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/document'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/history'
+              examples:
+                document:
+                  $ref: '#/components/examples/document'
+                history:
+                  $ref: '#/components/examples/history'
+components:
+  schemas:
+    status:
+      type: object
+      additionalProperties: true
+      example:
+        crux.version/version: "20.09-1.12.1-beta-SNAPSHOT"
+        crux.version/revision: null
+        crux.index/index-version: 13
+        crux.doc-log/consumer-state: null
+        crux.tx-log/consumer-state: null
+        crux.kv/kv-store: crux.rocksdb.RocksKv
+        crux.kv/estimate-num-keys: 3
+        crux.kv/size: 4844499
+    cruxID:
+      type: string
+      example: "ivan"
+    validTime:
+      type: string
+      description: "For more information about valid time, see here: https://opencrux.com/about/bitemporality.html."
+      format: date-time
+      example: "2017-07-21T17:32:28Z"
+    transactionTime:
+      type: string
+      description: "For more information about transaction time, see here: https://opencrux.com/about/bitemporality.html."
+      format: date-time
+      example: "2017-07-21T17:32:28Z"
+    document:
+      type: object
+      description: "A crux document object - containing, at minimum, a Crux ID"
+      additionalProperties: true
+      properties:
+        crux.db/id:
+          $ref: '#/components/schemas/cruxID'
+      required:
+        - crux.db/id
+      example:
+        $ref: '#/components/examples/document'
+    history:
+      type: object
+      description: "A crux entity history element - containing information about a version of an entity"
+      properties:
+        crux.tx/tx-time:
+          $ref: '#/components/schemas/transactionTime'
+        crux.tx/tx-id:
+          type: integer
+        crux.tx/valid-time:
+          $ref: '#/components/schemas/validTime'
+        crux.db/content-hash:
+          type: string
+          example: "6698fb7285dc3b28ac3d7b90363c0f929a37822d"
+        crux.db/doc:
+          $ref: '#/components/schemas/document'
+      required:
+        - crux.tx/tx-time
+        - crux.tx/tx-id
+        - crux.tx/valid-time
+        - crux.db/content-hash
+    ## These are incomplete - and are not entirely accurate
+    putOperation:
+      type: object
+      properties:
+        document:
+          $ref: '#/components/schemas/document'
+        validTime:
+          $ref: '#/components/schemas/validTime'
+      required:
+        - document
+    deleteOperation:
+      type: object
+      properties:
+        entityId:
+          $ref: '#/components/schemas/cruxID'
+        validTime:
+          $ref: '#/components/schemas/validTime'
+      required:
+        - entityId
+    matchOperation:
+      properties:
+        entityId:
+          $ref: '#/components/schemas/cruxID'
+        document:
+          $ref: '#/components/schemas/document'
+        validTime:
+          $ref: '#/components/schemas/validTime'
+      required:
+        - entityId
+    evictOperation:
+      properties:
+        entityId:
+          $ref: '#/components/schemas/cruxID'
+      required:
+        - entityId
+    transaction:
+      type: array
+      items:
+        anyOf:
+          - $ref: '#/components/schemas/putOperation'
+          - $ref: '#/components/schemas/evictOperation'
+          - $ref: '#/components/schemas/deleteOperation'
+          - $ref: '#/components/schemas/matchOperation'
+
+
+  examples:
+    document:
+      value:
+        crux.db/id: ":ivan"
+        firstName: "Ivan"
+        lastName: "Ivanov"
+      summary: "Example Crux Document"
+    history:
+      value:
+        - crux.tx/tx-time: "2020-09-10T11:16:10.983-00:00"
+          crux.tx/tx-id: 0
+          crux.tx/valid-time: "2020-09-10T11:16:10.983-00:00"
+          crux.db/content-hash: "6698fb7285dc3b28ac3d7b90363c0f929a37822d"
+          crux.db/doc:
+            crux.db/id: ":hello"
+        - crux.tx/tx-time: "2020-09-21T09:49:12.300-00:00"
+          crux.tx/tx-id: 2
+          crux.tx/valid-time: "2020-09-21T09:49:12.300-00:00"
+          crux.db/content-hash:  "6920e011225dfccbf1ff28c3a57862bdbf026617b"
+          crux.db/doc:
+            crux.db/id: ":hello"
+            age: 21
+      summary: "Example of a set of histories"
