@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import clojure.java.api.Clojure;
+import clojure.lang.AFn;
 import clojure.lang.IFn;
 import org.apache.kafka.common.serialization.Deserializer;
 
@@ -21,9 +22,16 @@ public class TransitDeserializer implements Deserializer<Object> {
         IFn readHandler = Clojure.var("cognitect.transit/read-handler");
         Clojure.var("clojure.core/require").invoke(Clojure.read("crux.codec"));
         IFn idEdnReader = Clojure.var("crux.codec/id-edn-reader");
+	IFn hexToIdBuffer = Clojure.var("crux.codec/hex->id-buffer");
+	IFn newId = Clojure.var("crux.codec/new-id");
         jsonVerbose = Clojure.read(":json-verbose");
         Map<Object, Object> handlers = new HashMap<>();
         handlers.put("crux/id", readHandler.invoke(idEdnReader));
+	handlers.put("crux.codec/id", readHandler.invoke(new AFn() {
+                public Object invoke(Object c) {
+		    return newId.invoke(hexToIdBuffer.invoke(c));
+		}
+	    }));
         options = new HashMap<>();
         options.put(Clojure.read(":handlers"), handlers);
     }
