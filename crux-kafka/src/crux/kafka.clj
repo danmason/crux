@@ -2,12 +2,14 @@
   (:require [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.tools.logging :as log]
+            [clojure.instant :as instant]
             [crux.codec :as c]
             [crux.db :as db]
             [crux.io :as cio]
             [crux.status :as status]
             [crux.system :as sys]
-            [crux.tx :as tx])
+            [crux.tx :as tx]
+            [crux.tx.conform :as txc])
   (:import crux.db.DocumentStore
            [crux.kafka.nippy NippyDeserializer NippySerializer]
            java.io.Closeable
@@ -127,8 +129,33 @@
   (let [name->description @(.all (.describeTopics admin-client [tx-topic]))]
     (assert (= 1 (count (.partitions ^TopicDescription (get name->description tx-topic)))))))
 
+(defn- transform-id [id]
+  (when id
+    (if (instance? crux.codec.Id id)
+      id
+      (try
+        (-> id c/hex->id-buffer c/new-id)
+        (catch Exception _e
+          id)))))
+
+(defn- transform-tx-events [tx-events]
+  (map
+   (fn [tx-event]
+     (-> tx-event
+         (update 0 keyword)
+         (txc/<-tx-event)
+         (txc/->tx-event {::txc/->crux-id transform-id
+                          ::txc/->valid-time (fn [vt]
+                                               (if (inst? vt)
+                                                 vt
+                                                 (try
+                                                   (instant/read-instant-date vt)
+                                                   (catch Exception _e
+                                                     vt))))})))
+   tx-events))
+
 (defn- tx-record->tx-log-entry [^ConsumerRecord record]
-  {:crux.tx.event/tx-events (.value record)
+  {:crux.tx.event/tx-events (transform-tx-events (.value record))
    :crux.tx/tx-id (.offset record)
    :crux.tx/tx-time (Date. (.timestamp record))})
 
@@ -225,13 +252,19 @@
 
 ;;;; DocumentStore
 
-(defn- submit-docs [id-and-docs {:keys [^KafkaProducer producer, doc-topic]}]
+(defn- transform-doc-for-json [doc]
+  (-> doc
+      (update :crux.db/id pr-str)
+      (cio/update-if :crux.db/fn pr-str)))
+
+(defn- submit-docs [id-and-docs {:keys [^KafkaProducer producer, doc-topic, serializer]}]
   (doseq [[content-hash doc] id-and-docs]
-    (->> (ProducerRecord. doc-topic content-hash doc)
+    (->> (ProducerRecord. doc-topic content-hash (cond-> doc
+                                                   (= serializer "crux.kafka.json.JsonSerializer") (transform-doc-for-json)))
          (.send producer)))
   (.flush producer))
 
-(defrecord KafkaDocumentStore [^KafkaProducer producer doc-topic
+(defrecord KafkaDocumentStore [^KafkaProducer producer doc-topic serializer
                                local-document-store
                                ^Thread indexing-thread !indexing-error]
   Closeable
@@ -266,10 +299,18 @@
           tp-offsets
           doc-records))
 
-(defn doc-record->id+doc [^ConsumerRecord doc-record]
-  [(c/new-id (.key doc-record)) (.value doc-record)])
+(defn- read-json-doc [doc]
+  (-> doc
+      (update :crux.db/id read-string)
+      (cio/update-if :crux.db/fn read-string)))
 
-(defn- index-doc-log [{:keys [local-document-store index-store !error doc-topic-opts kafka-config group-id poll-wait-duration]}]
+(defn doc-record->id+doc [^ConsumerRecord doc-record serializer]
+  (doto
+      [(transform-id (.key doc-record)) (cond-> (.value doc-record)
+                                          (= serializer "crux.kafka.json.JsonSerializer") read-json-doc)]
+    prn))
+
+(defn- index-doc-log [{:keys [local-document-store index-store !error doc-topic-opts kafka-config group-id poll-wait-duration serializer]}]
   (let [doc-topic (:topic-name doc-topic-opts)
         tp-offsets (read-doc-offsets index-store)]
     (try
@@ -279,7 +320,7 @@
         (loop [tp-offsets tp-offsets]
           (let [tp-offsets (->> (consumer-seqs consumer poll-wait-duration)
                                 (reduce (fn [tp-offsets doc-records]
-                                          (db/submit-docs local-document-store (->> doc-records (into {} (map doc-record->id+doc))))
+                                          (db/submit-docs local-document-store (->> doc-records (into {} (map #(doc-record->id+doc % serializer)))))
                                           (doto (update-doc-offsets tp-offsets doc-records)
                                             (->> (store-doc-offsets index-store))))
                                         tp-offsets))]
@@ -315,15 +356,16 @@
                                                          :default (Duration/ofSeconds 1)}} }
   [{:keys [index-store local-document-store kafka-config doc-topic-opts] :as opts}]
   (ensure-doc-topic-exists opts)
-
-  (map->KafkaDocumentStore {:producer (->producer {:kafka-config kafka-config})
-                            :doc-topic (:topic-name doc-topic-opts)
-                            :index-store index-store
-                            :local-document-store local-document-store
-                            :!indexing-error (atom nil)
-                            :indexing-thread (doto (Thread. #(index-doc-log opts))
-                                               (.setName "crux-doc-consumer")
-                                               (.start))}))
+  (let [serializer (get kafka-config "value.serializer")]
+    (map->KafkaDocumentStore {:producer (->producer {:kafka-config kafka-config})
+                              :serializer serializer
+                              :doc-topic (:topic-name doc-topic-opts)
+                              :index-store index-store
+                              :local-document-store local-document-store
+                              :!indexing-error (atom nil)
+                              :indexing-thread (doto (Thread. #(index-doc-log (assoc opts :serializer serializer)))
+                                                 (.setName "crux-doc-consumer")
+                                                 (.start))})))
 
 (defrecord IngestOnlyDocumentStore [^KafkaProducer producer doc-topic]
   db/DocumentStore

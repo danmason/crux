@@ -29,6 +29,16 @@
                                                   fk/with-cluster-doc-store-opts
                                                   fix/with-node])
                                 (with-meta {::embedded-kafka? true}))
+       :local-kafka-json (-> (t/join-fixtures [(partial
+                                                fk/with-kafka-config
+                                                {:properties-map {"key.serializer" "crux.kafka.json.JsonSerializer"
+                                                                  "key.deserializer" "crux.kafka.json.JsonDeserializer"
+                                                                  "value.serializer" "crux.kafka.json.JsonSerializer"
+                                                                  "value.deserializer" "crux.kafka.json.JsonDeserializer"}})
+                                               fk/with-cluster-tx-log-opts
+                                               fk/with-cluster-doc-store-opts
+                                               fix/with-node])
+                             (with-meta {::embedded-kafka? true}))
        :kafka+remote-doc-store (-> (t/join-fixtures [fk/with-cluster-tx-log-opts fix/with-node])
                                    (with-meta {::embedded-kafka? true}))}
       #_(select-keys [:local-standalone])

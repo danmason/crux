@@ -25,7 +25,6 @@ public class JsonSerializer implements Serializer<Object> {
         Clojure.var("clojure.core/require").invoke(Clojure.read("crux.codec"));
         IFn ednIdtoOriginalId = Clojure.var("crux.codec/edn-id->original-id");
 	Clojure.var("clojure.core/require").invoke(Clojure.read("crux.io"));
-	IFn prEdnStr = Clojure.var("crux.io/pr-edn-str");
         Class<?> ednIdClass =  (Class<?>) Clojure.var("clojure.core/resolve").invoke(Clojure.read("crux.codec.EDNId"));
         addEncoder.invoke(ednIdClass, new AFn() {
                 public Object invoke(Object c, Object jsonGenerator) {
@@ -41,7 +40,7 @@ public class JsonSerializer implements Serializer<Object> {
 	addEncoder.invoke(codecIdClass, new AFn() {
                 public Object invoke(Object c, Object jsonGenerator) {
                     try {
-                        ((JsonGenerator) jsonGenerator).writeString(prEdnStr.invoke(c).toString());
+                        ((JsonGenerator) jsonGenerator).writeString(c.toString());
                         return null;
                     } catch (IOException e) {
                         throw new RuntimeException(e);

@@ -134,51 +134,64 @@
   (throw (err/illegal-arg :invalid-op
                           {::err/message (str "invalid op: " (pr-str tx-op))})))
 
-(defmulti ->tx-event :op :default ::default)
+(defmulti conform-tx-event
+  (fn [event decoders]
+    (:op event))
+  :default ::default)
 
-(defmethod ->tx-event :crux.tx/put [{:keys [op eid doc-id start-valid-time end-valid-time]}]
-  (cond-> [op (c/new-id eid) doc-id]
-    start-valid-time (conj start-valid-time)
-    end-valid-time (conj end-valid-time)))
+(defmethod conform-tx-event :crux.tx/put [{:keys [op eid doc-id start-valid-time end-valid-time]}
+                                          {::keys [->crux-id ->valid-time], :or {->crux-id identity, ->valid-time identity} :as decoders}]
+  (cond-> [op (c/new-id (->crux-id eid)) (->crux-id doc-id)]
+    start-valid-time (conj (->valid-time start-valid-time))
+    end-valid-time (conj (->valid-time end-valid-time))))
 
-(defmethod ->tx-event :crux.tx/delete [{:keys [op eid start-valid-time end-valid-time]}]
-  (cond-> [op (c/new-id eid)]
-    start-valid-time (conj start-valid-time)
-    end-valid-time (conj end-valid-time)))
+(defmethod conform-tx-event :crux.tx/delete [{:keys [op eid start-valid-time end-valid-time]}
+                                             {::keys [->crux-id ->valid-time], :or {->crux-id identity, ->valid-time identity}}]
+  (cond-> [op (c/new-id (->crux-id eid))]
+    start-valid-time (conj (->valid-time start-valid-time))
+    end-valid-time (conj (->valid-time end-valid-time))))
 
-(defmethod ->tx-event :crux.tx/match [{:keys [op eid doc-id at-valid-time]}]
-  (cond-> [op (c/new-id eid) doc-id]
-    at-valid-time (conj at-valid-time)))
+(defmethod conform-tx-event :crux.tx/match [{:keys [op eid doc-id at-valid-time]}
+                                            {::keys [->crux-id ->valid-time], :or {->crux-id identity, ->valid-time identity}}]
+  (cond-> [op (c/new-id (->crux-id eid)) (->crux-id doc-id)]
+    at-valid-time (conj (->valid-time at-valid-time))))
 
-(defmethod ->tx-event :crux.tx/cas [{:keys [op eid old-doc-id new-doc-id at-valid-time]}]
-  (cond-> [op (c/new-id eid) old-doc-id new-doc-id]
-    at-valid-time (conj at-valid-time)))
+(defmethod conform-tx-event :crux.tx/cas [{:keys [op eid old-doc-id new-doc-id at-valid-time]}
+                                          {::keys [->crux-id ->valid-time], :or {->crux-id identity, ->valid-time identity}}]
+  (cond-> [op (c/new-id (->crux-id eid)) (->crux-id old-doc-id) (->crux-id new-doc-id)]
+    at-valid-time (conj (->valid-time at-valid-time))))
 
-(defmethod ->tx-event :crux.tx/evict [{:keys [op eid]}]
-  [op eid])
+(defmethod conform-tx-event :crux.tx/evict [{:keys [op eid]} {::keys [->crux-id], :or {->crux-id identity}}]
+  [op (->crux-id eid)])
 
-(defmethod ->tx-event :crux.tx/fn [{:keys [op fn-eid arg-doc-id]}]
-  (cond-> [op (c/new-id fn-eid)]
-    arg-doc-id (conj arg-doc-id)))
+(defmethod conform-tx-event :crux.tx/fn [{:keys [op fn-eid arg-doc-id]} {::keys [->crux-id], :or {->crux-id identity}}]
+  (cond-> [op (c/new-id (->crux-id fn-eid))]
+    arg-doc-id (conj (->crux-id arg-doc-id))))
 
-(defmethod ->tx-event ::default [tx-op]
+(defmethod conform-tx-event ::default [tx-op _decoders]
   (throw (err/illegal-arg :invalid-op
                           {::err/message (str "invalid op: " (pr-str tx-op))})))
+
+(defn ->tx-event
+  ([event]
+   (->tx-event event {}))
+  ([event decoders]
+   (conform-tx-event event decoders)))
 
 (defmulti <-tx-event first
   :default ::default)
 
 (defmethod <-tx-event :crux.tx/put [evt]
-  (zipmap [:op :eid :content-hash :start-valid-time :end-valid-time] evt))
+  (zipmap [:op :eid :doc-id :start-valid-time :end-valid-time] evt))
 
 (defmethod <-tx-event :crux.tx/delete [evt]
   (zipmap [:op :eid :start-valid-time :end-valid-time] evt))
 
 (defmethod <-tx-event :crux.tx/cas [evt]
-  (zipmap [:op :eid :old-content-hash :new-content-hash :valid-time] evt))
+  (zipmap [:op :eid :old-doc-id :new-doc-id :at-valid-time] evt))
 
 (defmethod <-tx-event :crux.tx/match [evt]
-  (zipmap [:op :eid :content-hash :valid-time] evt))
+  (zipmap [:op :eid :doc-id :at-valid-time] evt))
 
 (defmethod <-tx-event :crux.tx/evict [[op eid & args]]
   (let [[start-valid-time end-valid-time] (filter inst? args)
@@ -189,12 +202,12 @@
      :keep-latest? keep-latest?, :keep-earliest? keep-earliest?}))
 
 (defmethod <-tx-event :crux.tx/fn [evt]
-  (zipmap [:op :fn-eid :args-content-hash] evt))
+  (zipmap [:op :fn-eid :arg-doc-id] evt))
 
 (defn tx-events->doc-hashes [tx-events]
   (->> tx-events
        (map <-tx-event)
-       (mapcat #(keep % [:content-hash :old-content-hash :new-content-hash :args-content-hash]))
+       (mapcat #(keep % [:doc-id :old-doc-id :new-doc-id :arg-doc-id]))
        (remove #{c/nil-id-buffer})))
 
 (defn tx-events->tx-ops [document-store tx-events]
