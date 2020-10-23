@@ -1,0 +1,4 @@
+name: blog
+title: Crux Blog
+version: master
+start_page: ROOT:blog.adoc

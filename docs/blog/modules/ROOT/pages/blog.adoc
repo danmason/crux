@@ -1,0 +1,3 @@
+= Blog
+:page-layout: blog
+:page-nav: black-nav
