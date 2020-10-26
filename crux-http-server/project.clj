@@ -8,6 +8,7 @@
                  [hiccup "2.0.0-alpha2"]
                  [juxt/crux-core "crux-git-version-beta"]
                  [metosin/reitit "0.4.2"]
+                 [metosin/reitit-swagger-ui "0.5.10"]
                  [ring/ring-core "1.8.0"]
                  [ring/ring-jetty-adapter "1.8.0"]
                  [ring/ring-codec "1.1.2"]
