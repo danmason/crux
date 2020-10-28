@@ -478,12 +478,13 @@
                                                          :json-encode-fn query-list-json-encode})}}}]
                  ["/sparql" {:get (sparqql crux-node)
                              :post (sparqql crux-node)
-                             :no-doc true}]]
-                ["/swagger.json"
+                             :no-doc true}]
+
+                 ["/swagger.json"
                  {:get {:no-doc true
                         :swagger {:info {:title "Crux API"}}
                         :handler (swagger/create-swagger-handler)
-                        :muuntaja (m/create (assoc (util/->default-muuntaja {}) :default-format "application/json"))}}]]
+                        :muuntaja (m/create (assoc (util/->default-muuntaja {}) :default-format "application/json"))}}]]]
 
                {:data
                 {:muuntaja (m/create (util/->default-muuntaja {:json-encode-fn http-json/camel-case-keys}))
