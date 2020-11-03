@@ -96,11 +96,13 @@
   (send [_ {:crux/keys [event-type] :as event}]
     (s/assert ::event event)
     (doseq [{:keys [^ExecutorService executor f] :as listener} (get @!listeners event-type)]
-      (if sync?
-        (try
-          (f event)
-          (catch Exception e))
-        (.submit executor ^Runnable #(f event)))))
+      (let [try-f #(try
+                     (f event)
+                     (catch Exception e
+                       (log/error e)))]
+        (if sync?
+          (try-f)
+          (.submit executor ^Runnable try-f)))))
 
   Closeable
   (close [_]
