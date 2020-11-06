@@ -4,7 +4,14 @@
             [crux.metrics.query :as query-metrics]
             [crux.status :as status]
             [crux.system :as sys])
-  (:import [com.codahale.metrics Gauge Meter MetricRegistry Snapshot Timer]))
+  (:import [com.codahale.metrics Gauge Meter MetricRegistry Snapshot Timer ScheduledReporter]
+           java.io.Closeable))
+
+(defrecord Reporter [^ScheduledReporter reporter]
+  Closeable
+  (close [_]
+    (.report reporter)
+    (.stop reporter)))
 
 (defn ->registry [_]
   (dropwizard/new-registry))

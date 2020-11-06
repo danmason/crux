@@ -22,11 +22,12 @@
                                              :required? true
                                              :spec ::sys/string}}}
   [{:keys [registry prefix metric-filter push-gateway report-frequency]}]
-  (-> (PrometheusReporter/forRegistry registry)
-      (cond-> prefix (.prefixedWith prefix)
-              metric-filter (.filter metric-filter))
-      (.build (Pushgateway. push-gateway))
-      (doto (.start (.toMillis ^Duration report-frequency) (TimeUnit/MILLISECONDS)))))
+  (metrics/->Reporter
+   (-> (PrometheusReporter/forRegistry registry)
+       (cond-> prefix (.prefixedWith prefix)
+               metric-filter (.filter metric-filter))
+       (.build (Pushgateway. push-gateway))
+       (doto (.start (.toMillis ^Duration report-frequency) (TimeUnit/MILLISECONDS))))))
 
 (defn ->http-exporter {::sys/deps {:registry ::metrics/registry
                                    :metrics ::metrics/metrics}

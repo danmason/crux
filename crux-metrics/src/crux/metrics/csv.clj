@@ -27,8 +27,9 @@
   [{:keys [^MetricRegistry registry report-frequency rate-unit duration-unit ^Path output-file]}]
   (let [output-file (doto (.toFile output-file)
                       (io/make-parents))]
-    (-> (CsvReporter/forRegistry registry)
-        (cond-> rate-unit (.convertRatesTo rate-unit)
-                duration-unit (.convertDurationsTo duration-unit))
-        (.build output-file)
-        (doto (.start (.toMillis ^Duration report-frequency) TimeUnit/MILLISECONDS)))))
+    (metrics/->Reporter
+     (-> (CsvReporter/forRegistry registry)
+         (cond-> rate-unit (.convertRatesTo rate-unit)
+                 duration-unit (.convertDurationsTo duration-unit))
+         (.build output-file)
+         (doto (.start (.toMillis ^Duration report-frequency) TimeUnit/MILLISECONDS))))))

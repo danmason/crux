@@ -21,10 +21,10 @@
                               :metrics ::metrics/metrics}}
   ^com.codahale.metrics.jmx.JmxReporter
   [{:keys [^MetricRegistry registry domain rate-unit duration-unit]}]
-
-  (-> (JmxReporter/forRegistry registry)
-      (cond-> domain (.inDomain domain)
-              rate-unit (.convertRatesTo rate-unit)
-              duration-unit (.convertDurationsTo duration-unit))
-      .build
-      (doto (.start))))
+  (metrics/->Reporter
+   (-> (JmxReporter/forRegistry registry)
+       (cond-> domain (.inDomain domain)
+               rate-unit (.convertRatesTo rate-unit)
+               duration-unit (.convertDurationsTo duration-unit))
+       .build
+       (doto (.start)))))

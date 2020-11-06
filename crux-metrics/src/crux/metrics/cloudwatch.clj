@@ -50,19 +50,19 @@
   (let [cw-client (-> (CloudWatchAsyncClient/builder)
                       (cond-> region ^CloudWatchAsyncClientBuilder (.region (Region/of region)))
                       (.build))]
+    (metrics/->Reporter
+     (-> (CloudWatchReporter/forRegistry registry cw-client "crux.metrics.cloudwatch")
+         (cond-> jvm-metrics? .withJvmMetrics
+                 dry-run? .withDryRun
+                 high-resolution? .withHighResolution
 
-    (-> (CloudWatchReporter/forRegistry registry cw-client "crux.metrics.cloudwatch")
-        (cond-> jvm-metrics? .withJvmMetrics
-                dry-run? .withDryRun
-                high-resolution? .withHighResolution
+                 (seq ignore-rules) (.filter (reify MetricFilter
+                                               (matches [_ metric-name _]
+                                                 (include-metric? metric-name ignore-rules))))
 
-                (seq ignore-rules) (.filter (reify MetricFilter
-                                              (matches [_ metric-name _]
-                                                (include-metric? metric-name ignore-rules))))
-
-                dimensions (.withGlobalDimensions (->> dimensions
-                                                       (map (fn [[k v]] (format "%s=%s" k v)))
-                                                       (into-array String))))
-        (.withPercentiles (into-array CloudWatchReporter$Percentile []))
-        (.build)
-        (doto (.start (.toMillis ^Duration dry-run-report-frequency) TimeUnit/MILLISECONDS)))))
+                 dimensions (.withGlobalDimensions (->> dimensions
+                                                        (map (fn [[k v]] (format "%s=%s" k v)))
+                                                        (into-array String))))
+         (.withPercentiles (into-array CloudWatchReporter$Percentile []))
+         (.build)
+         (doto (.start (.toMillis ^Duration dry-run-report-frequency) TimeUnit/MILLISECONDS))))))
