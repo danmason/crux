@@ -107,7 +107,7 @@
 
   (let [bench-results (run-benches (-> (or (parse-args args)
                                            (System/exit 1))
-                                       (update :selected-nodes disj "h2-rocksdb" "sqlite-rocksdb")))]
+                                       (update :selected-nodes disj "sqlite-rocksdb")))]
 
     (bench/post-to-slack (format "*Finished Benchmark*, Crux Version: %s, Commit Hash: %s\n"
                                  bench/crux-version bench/commit-hash))
