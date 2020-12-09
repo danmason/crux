@@ -31,7 +31,7 @@
                                 (with-meta {::embedded-kafka? true}))
        :kafka+remote-doc-store (-> (t/join-fixtures [fk/with-cluster-tx-log-opts fix/with-node])
                                    (with-meta {::embedded-kafka? true}))}
-      #_(select-keys [:local-standalone])
+      (select-keys [:local-kafka])
       #_(select-keys [:local-standalone :remote])
       #_(select-keys [:local-standalone :h2 :sqlite :remote])))
 

@@ -280,6 +280,7 @@
         (loop [tp-offsets tp-offsets]
           (let [tp-offsets (->> (consumer-seqs consumer poll-wait-duration)
                                 (reduce (fn [tp-offsets doc-records]
+                                          ;(prn "index-doc-log, docs: " (->> doc-records (into {} (map doc-record->id+doc))))
                                           (db/submit-docs local-document-store (->> doc-records (into {} (map doc-record->id+doc))))
                                           (doto (update-doc-offsets tp-offsets doc-records)
                                             (->> (store-doc-offsets index-store))))

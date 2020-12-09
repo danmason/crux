@@ -50,6 +50,7 @@
           (transient {}) ids)))))
 
   (submit-docs [this id-and-docs]
+    ;(prn "kvdocumentstore submit-docs" id-and-docs)
     (kv/store kv-store (for [[id doc] id-and-docs]
                          (MapEntry/create (encode-doc-key-to nil (c/->id-buffer id))
                                           (mem/->nippy-buffer doc)))))

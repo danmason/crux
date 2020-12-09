@@ -7,12 +7,17 @@
             [integrant.repl.state :refer [system]]
             [integrant.repl :as ir :refer [clear go suspend resume halt reset reset-all]]
             [crux.io :as cio]
+            [crux.db :as db]
+            [crux.codec :as c]
             [crux.lucene]
             [crux.kafka :as k]
             [crux.kafka.embedded :as ek]
             [crux.rocksdb :as rocks]
             [clojure.java.io :as io]
-            [crux.system :as sys])
+            [crux.system :as sys]
+            [crux.fixtures :as fix]
+            [crux.tx.event :as txe]
+            [crux.tx :as tx])
   (:import (crux.api ICruxAPI)
            (java.io Closeable File)
            java.nio.file.attribute.FileAttribute
@@ -88,7 +93,28 @@
                          :crux/tx-log {:crux/module `k/->tx-log, :kafka-config ::k/kafka-config}}}}))
 
 ;; swap for `embedded-kafka-config` to use embedded-kafka
-(ir/set-prep! (fn [] standalone-config))
+(ir/set-prep! (fn [] embedded-kafka-config))
 
 (defn crux-node []
   (::crux system))
+
+(defn args-test [n]
+  (fix/submit+await-tx (crux-node) [[:crux.tx/put {:crux.db/id (keyword (str "put-ivan-" n))
+                                                   :crux.db/fn '(fn [ctx doc]
+                                                                  [[:crux.tx/put (assoc doc :crux.db/id :ivan)]])}]])
+  (fix/submit+await-tx (crux-node) [[:crux.tx/fn (keyword (str "put-ivan-" n)) {:name (str "Ivan " n)}]])
+
+  (prn (= {:crux.db/id :ivan :name (str "Ivan " n)} (crux/entity (crux/db (crux-node)) :ivan)))
+
+  (let [arg-doc-id (with-open [tx-log (db/open-tx-log (:tx-log (crux-node)) nil)]
+                     (-> (iterator-seq tx-log) last ::txe/tx-events first last))]
+    (prn
+     "test pass? "
+     (= {:crux.db.fn/tx-events [[:crux.tx/put (c/new-id :ivan) (c/new-id {:crux.db/id :ivan, :name (str "Ivan " n)})]]}
+        (-> (db/fetch-docs (:document-store (crux-node)) #{arg-doc-id})
+            (get arg-doc-id)
+            (dissoc :crux.db/id))))))
+
+(dotimes [n 1000]
+  (with-redefs [tx/tx-fn-eval-cache (memoize eval)]
+    (args-test n)))
