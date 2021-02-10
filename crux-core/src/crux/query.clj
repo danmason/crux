@@ -169,6 +169,9 @@
 (defmethod pred-args-spec 'get-attr [_]
   (s/cat :pred-fn  #{'get-attr} :args (s/spec (s/cat :e-var logic-var? :attr literal? :not-found (s/? any?))) :return (s/? ::binding)))
 
+(defmethod pred-args-spec 'valid-time [_]
+  (s/cat :pred-fn  #{'valid-time} :args (s/spec (s/cat :e-var logic-var?)) :return (s/? ::binding)))
+
 (defmethod pred-args-spec '== [_]
   (s/cat :pred-fn #{'==} :args (s/tuple some? some?)))
 
@@ -986,6 +989,16 @@
                              arg-binding))]
         (with-open [pred-result (api/open-q* db query (object-array args))]
           (bind-binding return-type tuple-idxs-in-join-order (get idx-id->idx idx-id) (iterator-seq pred-result)))))))
+
+(declare entity-tx)
+(defmethod pred-constraint 'valid-time [_ {:keys [encode-value-fn idx-id arg-bindings
+                                                  return-type tuple-idxs-in-join-order] :as pred-ctx}]
+  (let [e-var (second arg-bindings)]
+    (fn pred-valid-time-constraint [index-snapshot db idx-id->idx ^List join-keys]
+      (let [e (bound-result-for-var index-snapshot e-var join-keys)
+            {::db/keys [valid-time] :as e-var-tx} (entity-tx db index-snapshot e)]
+        (bind-binding return-type tuple-idxs-in-join-order (get idx-id->idx idx-id) valid-time)))))
+
 
 (defn- built-in-unification-pred [unifier-fn {:keys [encode-value-fn arg-bindings]}]
   (let [arg-bindings (vec (for [arg-binding (rest arg-bindings)]
