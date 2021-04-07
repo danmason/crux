@@ -252,6 +252,19 @@
       :crux/index-store {:kv-store {:crux/module `rocks/->kv-store, :db-dir (io/file data-dir "indexes")}}
       :crux.metrics.cloudwatch/reporter cw-reporter-opts})
 
+   "postgresql-rocksdb"
+   (fn [data-dir]
+     {::j/connection-pool {:dialect 'crux.jdbc.psql/->dialect
+                           :db-spec {:host "localhost"
+                                     :port 5432
+                                     :dbname "postgres"
+                                     :user "postgres"
+                                     :password "password"}}
+      :crux/tx-log {:crux/module `j/->tx-log, :connection-pool ::j/connection-pool}
+      :crux/document-store {:crux/module `j/->document-store, :connection-pool ::j/connection-pool}
+      :crux/index-store {:kv-store {:crux/module `rocks/->kv-store, :db-dir (io/file data-dir "indexes")}}
+      :crux.metrics.cloudwatch/reporter cw-reporter-opts})
+
    "kafka-rocksdb"
    (fn [data-dir]
      (let [uuid (UUID/randomUUID)]

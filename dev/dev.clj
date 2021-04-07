@@ -87,8 +87,23 @@
                                                                                  :db-dir (io/file dev-node-dir "ek-documents")}}}
                          :crux/tx-log {:crux/module `k/->tx-log, :kafka-config ::k/kafka-config}}}}))
 
+(def postgres-config
+  {::crux {:node-opts {:crux.jdbc/connection-pool {:dialect 'crux.jdbc.psql/->dialect
+                                                   :db-spec {:host "localhost"
+                                                             :port 5432
+                                                             :dbname "postgres"
+                                                             :user "postgres"
+                                                             :password "password"}}
+                       :crux/index-store {:kv-store {:crux/module `rocks/->kv-store,
+                                                     :db-dir (io/file dev-node-dir "postgres-indexes"),
+                                                     :block-cache :crux.rocksdb/block-cache}}
+                       :crux/tx-log {:crux/module `crux.jdbc/->tx-log, :connection-pool :crux.jdbc/connection-pool}
+                       :crux/document-store {:crux/module `crux.jdbc/->document-store, :connection-pool :crux.jdbc/connection-pool}
+                       :crux.rocksdb/block-cache {:crux/module `rocks/->lru-block-cache
+                                                  :cache-size (* 128 1024 1024)}}}})
+
 ;; swap for `embedded-kafka-config` to use embedded-kafka
-(ir/set-prep! (fn [] standalone-config))
+(ir/set-prep! (fn [] postgres-config))
 
 (defn crux-node []
   (::crux system))

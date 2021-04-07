@@ -190,6 +190,16 @@ Resources:
               Value: PLAINTEXT://localhost:9092
           PortMappings:
             - ContainerPort: 9092
+        - Name: 'postgres-container'
+          Cpu: 1024
+          Memory: 2048
+          Image: postgres:13.2
+          Essential: true
+          Environment:
+            - Name: 'POSTGRES_PASSWORD'
+              Value: 'password'
+          PortMappings:
+            - ContainerPort: 5432
         - Name: 'bench-container'
           Cpu: 2048
           Memory: 8146
@@ -231,6 +241,7 @@ Resources:
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
+
     Properties:
       Path: /
       Roles: [!Ref 'EC2Role']
